@@ -9,8 +9,8 @@
   "author": "arkhan998",
   "license": "ISC",
   "dependencies": {
-    "@whiskeysockets/baileys": "^6.7.2",
+    "@whiskeysockets/baileys": "^6.7.18",
     "pino": "^8.1.0",
-    "node-fetch": "^2.6.7"
+    "node-fetch": "^3.3.2"
   }
 }
