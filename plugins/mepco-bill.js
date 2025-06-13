@@ -1,66 +1,79 @@
 /**
  * MEPCO Bill Checker Command for DULHAN-MD
- * * This command fetches electricity bill details using a reference number.
- * Note: This uses a placeholder API. You might need to find a working
- * bill checking API and adjust the code accordingly.
+ * This command now uses web scraping to fetch live bill data from mepcoebill.pk
  */
 
-// You might need to install node-fetch: npm install node-fetch
-const fetch = require('node-fetch');
+const axios = require('axios');
+const cheerio = require('cheerio');
+const fetch = require('node-fetch'); // node-fetch might still be needed for other things, so we keep it.
 
 module.exports = {
   command: ['mepco', 'bill', 'bijli'],
   description: 'Checks MEPCO electricity bill from a reference number.',
   category: 'utility',
   
-  /**
-   * @param {object} m The message object
-   * @param {object} options
-   * @param {string} options.text The reference number provided by the user
-   */
   async handler(m, { text }) {
-    if (!text || text.length !== 14) {
-      return m.reply('❌ Please provide a valid 14-digit MEPCO reference number.\n\n*Example:*\n.mepco 12345678901234');
+    if (!text || (text.length !== 14 && text.length !== 10)) {
+      return m.reply('❌ Please provide a valid 14-digit Reference Number or 10-digit Customer ID.\n\n*Example:*\n.mepco 12345678901234');
     }
 
     const refNo = text.trim();
-    // A placeholder API URL. You will need to find a real one.
-    const apiUrl = `https://api.example.com/mepco-bill/${refNo}`;
-
-    await m.reply(`🔍 Searching for bill details for reference number: *${refNo}*...\nPlease wait.`);
+    await m.reply(`🔍 Searching for bill details for: *${refNo}*...\nPlease wait, Dulhan aapke liye bill dhoond rahi hai.`);
 
     try {
-      // Fetching data from the API
-      const response = await fetch(apiUrl);
-      if (!response.ok) {
-        // This handles cases where the API returns an error (e.g., 404 Not Found)
-        throw new Error('Bill not found or API is down.');
-      }
-      const data = await response.json();
+      // Data to be sent in the POST request, mimicking a form submission.
+      const formData = new URLSearchParams();
+      formData.append('referenceno', refNo);
+      formData.append('search_bill', 'search');
 
-      // Assuming the API returns data in this format
-      if (data.status === 'success') {
-        const bill = data.billDetails;
-        const replyText = `
+      // Making the POST request to the website's backend script
+      const response = await axios.post('https://mepcoebill.pk/sql-actions.php', formData, {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36'
+        }
+      });
+      
+      const html = response.data;
+      const $ = cheerio.load(html);
+
+      // Check if the bill was not found
+      if ($('h5:contains("Bill Not Found")').length > 0) {
+        return m.reply(`❌ *Bill Not Found.*\n\nPlease double-check the Reference Number / Customer ID and try again.`);
+      }
+
+      // Extracting data by finding the right elements
+      const billDetails = {};
+      $('tbody tr').each((i, elem) => {
+        const key = $(elem).find('td').eq(0).text().trim().replace(':', '');
+        const value = $(elem).find('td').eq(1).text().trim();
+        if (key && value) {
+          billDetails[key] = value;
+        }
+      });
+
+      if (Object.keys(billDetails).length === 0) {
+          throw new Error('Could not parse bill details. The website structure might have changed.');
+      }
+      
+      const replyText = `
 ✅ *MEPCO Bill Found!*
 
-*Consumer Name:* ${bill.consumerName}
-*Reference No:* ${bill.referenceNo}
-*Bill Month:* ${bill.billMonth}
-*Due Date:* ${bill.dueDate}
+*Consumer Name:* ${billDetails['Consumer Name'] || 'N/A'}
+*Reference No:* ${billDetails['Reference No'] || refNo}
+*Bill Month:* ${billDetails['Bill Month'] || 'N/A'}
+*Due Date:* *${billDetails['Due Date'] || 'N/A'}*
 
-*Amount within Due Date:* Rs. ${bill.amountPayable}
-*Amount after Due Date:* Rs. ${bill.lateSurcharge}
+*Amount within Due Date:* Rs. ${billDetails['Payable Amount within Due Date'] || 'N/A'}
+*Amount after Due Date:* Rs. ${billDetails['Payable Amount after Due Date'] || 'N/A'}
 
-*Bill Status:* *${bill.status}*
-        `;
-        m.reply(replyText);
-      } else {
-        m.reply(`❌ *Error:* Could not find the bill. Please check the reference number.\n\n*Reason:* ${data.message}`);
-      }
+*Bill Status:* *${billDetails['Bill Status'] || 'N/A'}*
+      `;
+      m.reply(replyText);
+
     } catch (error) {
-      console.error('MEPCO Bill API Error:', error);
-      m.reply('🤕 Sorry, the bill checking service is currently unavailable. Please try again later.');
+      console.error('MEPCO Bill Scraping Error:', error);
+      m.reply('🤕 Sorry, the bill checking service is currently unavailable. Website se data fetch karne mein masla aa raha hai. Please try again later.');
     }
   }
 };
