@@ -1,0 +1,15 @@
+# render.yaml - Render Deployment Configuration for DULHAN-MD
+
+services:
+  - type: worker  # Bots background workers hoty hain, web services nahi
+    name: dulhan-md
+    runtime: node
+    branch: main  # GitHub ki main branch
+    buildCommand: "npm install"
+    startCommand: "node index.js"
+    healthCheckPath: / # Isko add karna zaroori nahi but good practice hai
+    envVars:
+      - key: NODE_VERSION
+        value: 18 # Node.js ka version specify karein
+    buildpacks:
+      - url: https://github.com/jonathanong/heroku-buildpack-ffmpeg-latest
