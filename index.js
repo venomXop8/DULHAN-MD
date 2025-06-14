@@ -1,11 +1,11 @@
 /**
- * DULHAN-MD - Main Bot File (Profile Picture & QR Fix)
+ * DULHAN-MD - Main Bot File (with Stylish Channel Mention)
  */
 
 const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, Browsers, downloadMediaMessage } = require('@whiskeysockets/baileys');
 const pino = require('pino');
 const qrcode = require('qrcode-terminal');
-const axios = require('axios'); // Hum axios ka istemal karenge photo download karne ke liye
+const axios = require('axios');
 const { readdirSync, existsSync } = require('fs');
 const path = require('path');
 const config = require('./config');
@@ -28,6 +28,9 @@ for (const file of files) {
 
 const startTime = Date.now();
 
+// List of commands that will use the new stylish reply
+const stylishCommands = ['menu', 'owner', 'alive', 'ping', 'info'];
+
 async function connectToWhatsApp() {
     const { state, saveCreds } = await useMultiFileAuthState('sessions');
 
@@ -43,43 +46,30 @@ async function connectToWhatsApp() {
 
         if (qr) {
             console.log("------------------------------------------------");
-            console.log("QR code generate ho gaya hai, please scan karein:");
             qrcode.generate(qr, { small: true });
             console.log("------------------------------------------------");
         }
 
         if (connection === 'close') {
             const shouldReconnect = (lastDisconnect.error)?.output?.statusCode !== DisconnectReason.loggedOut;
-            console.log('Connection closed, reconnecting...', shouldReconnect);
-            if (shouldReconnect) {
-                connectToWhatsApp();
-            }
+            if (shouldReconnect) connectToWhatsApp();
         } else if (connection === 'open') {
             console.log(`👰‍♀️ ${config.BOT_NAME} is now online!`);
-            
-            // --- NAYI PROFILE PICTURE LOGIC ---
             try {
-                console.log('Updating profile picture...');
-                // Pehle URL se image download karein
                 const response = await axios.get(config.PROFILE_PIC_URL, { responseType: 'arraybuffer' });
-                const imageBuffer = Buffer.from(response.data, 'binary');
-                
-                // Phir buffer se picture update karein
-                await sock.updateProfilePicture(sock.user.id, imageBuffer);
-                console.log('✅ Profile picture updated successfully!');
+                await sock.updateProfilePicture(sock.user.id, Buffer.from(response.data, 'binary'));
+                console.log('✅ Profile picture updated!');
             } catch (e) {
                 console.error('❌ Failed to update profile picture:', e.message);
             }
-            // --- END OF NEW LOGIC ---
         }
     });
 
     sock.ev.on('creds.update', saveCreds);
 
     sock.ev.on('messages.upsert', async (m) => {
-        // ... (Message handling logic poori wesi hi rahegi)
         const msg = m.messages[0];
-        if (!msg.message || msg.key.fromMe) return;
+        if (!msg.message) return; // Removed fromMe check for self-testing
 
         const messageType = Object.keys(msg.message)[0];
         const body = (messageType === 'conversation') ? msg.message.conversation :
@@ -97,15 +87,36 @@ async function connectToWhatsApp() {
 
         if (command) {
             try {
-                const advancedReply = async (text) => {
-                    const footerText = `\n\n*Powered by ${config.BOT_NAME}*\n${config.CHANNEL_LINK}`;
-                    await sock.sendMessage(msg.key.remoteJid, { text: text + footerText }, { quoted: msg });
-                    if (existsSync(config.AUDIO_REPLY_PATH)) {
-                        await sock.sendMessage(msg.key.remoteJid, { audio: { url: config.AUDIO_REPLY_PATH }, mimetype: 'audio/mpeg', ptt: true }, { quoted: msg });
-                    }
-                };
+                let replyFunction;
+
+                // Decide which reply style to use
+                if (stylishCommands.includes(commandName)) {
+                    // --- STYLISH REPLY FUNCTION ---
+                    replyFunction = (text, options = {}) => {
+                        return sock.sendMessage(m.key.remoteJid, {
+                            text: text,
+                            contextInfo: {
+                                externalAdReply: {
+                                    title: `👰‍♀️ ${config.BOT_NAME}`,
+                                    body: config.OWNER_NAME,
+                                    thumbnail: options.thumbnail || fs.readFileSync('./dulhan_thumbnail.jpg'), // Requires a thumbnail image
+                                    sourceUrl: config.CHANNEL_LINK,
+                                    mediaUrl: config.CHANNEL_LINK,
+                                    renderLargerThumbnail: true,
+                                    showAdAttribution: true,
+                                }
+                            }
+                        }, { quoted: msg });
+                    };
+                } else {
+                    // --- REGULAR REPLY FUNCTION ---
+                    replyFunction = (text) => {
+                        const footerText = `\n\n*Powered by ${config.BOT_NAME}*\n${config.CHANNEL_LINK}`;
+                        return sock.sendMessage(m.key.remoteJid, { text: text + footerText }, { quoted: msg });
+                    };
+                }
                 
-                const messageObject = { ...msg, reply: advancedReply, sock, BOT_CONFIG: config, startTime };
+                const messageObject = { ...msg, reply: replyFunction, sock, config, startTime };
                 await command.handler(messageObject, { text: args.join(' '), commands, downloadMediaMessage });
 
             } catch (e) {
