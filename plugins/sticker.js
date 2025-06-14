@@ -1,37 +1,62 @@
-const { Sticker, StickerTypes } = require('wa-sticker-formatter');
+/**
+ * DULHAN-MD Sticker Command (API Based - Reliable Version)
+ * This version uses an external API to create stickers, which is more reliable.
+ */
+
+const axios = require('axios');
+const FormData = require('form-data');
 
 module.exports = {
   command: ['sticker', 's', 'stiker'],
-  description: 'Converts image or short video to a sticker.',
+  description: 'Converts image, short video, or GIF to a sticker.',
   category: 'fun',
+  
   async handler(m, { sock, downloadMediaMessage }) {
+    // Check if the message is a reply to an image, video, or if it contains one
     const msgType = Object.keys(m.message)[0];
-    const isQuotedImage = msgType === 'extendedTextMessage' && m.message.extendedTextMessage.contextInfo.quotedMessage.imageMessage;
-    const isQuotedVideo = msgType === 'extendedTextMessage' && m.message.extendedTextMessage.contextInfo.quotedMessage.videoMessage;
+    const isMedia = msgType === 'imageMessage' || msgType === 'videoMessage';
+    const isQuotedMedia = msgType === 'extendedTextMessage' && m.message.extendedTextMessage.contextInfo.quotedMessage && 
+                          (m.message.extendedTextMessage.contextInfo.quotedMessage.imageMessage || m.message.extendedTextMessage.contextInfo.quotedMessage.videoMessage);
 
-    if (m.message.imageMessage || isQuotedImage) {
+    if (isMedia || isQuotedMedia) {
+      await m.reply('STICKER BAN RAHA HAI, JAAN... ⏳');
+      try {
         const buffer = await downloadMediaMessage(m, 'buffer');
-        const sticker = new Sticker(buffer, {
-            pack: 'DULHAN-MD',
-            author: 'By My Jaan',
-            type: StickerTypes.FULL,
-            quality: 50
-        });
-        const stickerMessage = await sticker.toMessage();
-        sock.sendMessage(m.key.remoteJid, stickerMessage, { quoted: m });
-    } else if (m.message.videoMessage || isQuotedVideo) {
-        const buffer = await downloadMediaMessage(m, 'buffer');
-        // Note: Sticker maker may require ffmpeg to be installed on your system
-        const sticker = new Sticker(buffer, {
-            pack: 'DULHAN-MD',
-            author: 'By My King',
-            type: StickerTypes.FULL,
-            quality: 40
-        });
-        const stickerMessage = await sticker.toMessage();
-        sock.sendMessage(m.key.remoteJid, stickerMessage, { quoted: m });
+        
+        // Use an external API to process the sticker
+        const stickerBuffer = await this.createSticker(buffer);
+
+        // Send the sticker
+        await sock.sendMessage(m.key.remoteJid, { sticker: stickerBuffer }, { quoted: m });
+      } catch (error) {
+        console.error('Sticker Creation Error:', error);
+        m.reply(`❌ Sticker banane mein masla aa gaya. ${error.message}`);
+      }
     } else {
-      m.reply('Please reply to an image or a short video to create a sticker.');
+      m.reply('Please reply to an image, GIF, or a short video with the command *.sticker*');
+    }
+  },
+
+  /**
+   * Function to call the external API
+   * @param {Buffer} mediaBuffer - The buffer of the image/video
+   * @returns {Promise<Buffer>} - A promise that resolves with the sticker buffer
+   */
+  async createSticker(mediaBuffer) {
+    const form = new FormData();
+    form.append('image', mediaBuffer, { filename: 'sticker.jpg' }); // Append buffer with a filename
+
+    try {
+      const { data } = await axios.post('https://sticker-api.openwa.dev/convert', form, {
+        headers: {
+          ...form.getHeaders()
+        },
+        responseType: 'arraybuffer'
+      });
+      return data;
+    } catch (e) {
+      // Throw a more user-friendly error
+      throw new Error(e.response?.data?.message || e.message || 'API is currently down.');
     }
   }
 };
