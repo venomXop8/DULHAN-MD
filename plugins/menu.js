@@ -2,32 +2,41 @@ module.exports = {
   command: ['menu', 'help', 'list'],
   description: 'Shows the list of all available commands.',
   category: 'main',
-  async handler(m, { commands }) {
-    let menuText = `👰‍♀️ *DULHAN-MD MENU* 👰‍♀️\n\nHello! Main aapki personal assistant Dulhan-MD hoon. Yeh rahi meri command list:\n`;
+  async handler(m, { commands, config }) {
+    let menuText = `
+Hello, *${m.pushName || 'Jaan'}*! 
+Main aapki personal assistant, *${config.BOT_NAME}* 👰‍♀️
+*╔═.✾. ═══════════╗*
+        *COMMAND MENU*
+*╚═══════════.✾. ═╝*
+`;
 
-    // Group commands by category
     const categories = {};
     const uniqueCommands = new Set();
 
     commands.forEach(cmd => {
         if (!uniqueCommands.has(cmd.command[0])) {
-            if (!categories[cmd.category]) {
-                categories[cmd.category] = [];
+            const category = cmd.category.toUpperCase();
+            if (!categories[category]) {
+                categories[category] = [];
             }
-            categories[cmd.category].push(cmd);
+            categories[category].push(cmd);
             uniqueCommands.add(cmd.command[0]);
         }
     });
 
     for (const category in categories) {
-        menuText += `\n*╭───[ ${category.toUpperCase()} ]───╮*\n`;
+        menuText += `
+*┌─── ∘°❉°∘ ───┐*
+       *${category}*
+*└─── °∘❉∘° ───┘*
+`;
         categories[category].forEach(cmd => {
-            menuText += `│ • *.${cmd.command[0]}* - ${cmd.description}\n`;
+            menuText += `  ⦿ *.${cmd.command[0]}*\n`;
         });
-        menuText += `*╰────────────╯*\n`;
     }
 
-    menuText += `\n*Note:* Kisi bhi command ke saath .help laga kar details dekh sakte hain.`;
+    menuText += `\n*Note:* Kisi bhi command ke saath *.help* laga kar details dekh sakte hain.`;
     
     m.reply(menuText);
   }
