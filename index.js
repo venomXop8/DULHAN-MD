@@ -1,18 +1,17 @@
 /**
- * DULHAN-MD - Main Bot File (QR Code Fix)
- * This version uses the modern way to handle and print QR codes.
+ * DULHAN-MD - Main Bot File (Profile Picture & QR Fix)
  */
 
 const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, Browsers, downloadMediaMessage } = require('@whiskeysockets/baileys');
 const pino = require('pino');
-const qrcode = require('qrcode-terminal'); // Naya package import kiya hai
+const qrcode = require('qrcode-terminal');
+const axios = require('axios'); // Hum axios ka istemal karenge photo download karne ke liye
 const { readdirSync, existsSync } = require('fs');
 const path = require('path');
 const config = require('./config');
 
 // --- Dynamic Command Handler ---
 const commands = new Map();
-// ... (Command handler code waisa hi rahega)
 const pluginDir = path.join(__dirname, 'plugins');
 const files = readdirSync(pluginDir).filter(file => file.endsWith('.js'));
 for (const file of files) {
@@ -34,7 +33,7 @@ async function connectToWhatsApp() {
 
     const sock = makeWASocket({
         logger: pino({ level: 'silent' }),
-        printQRInTerminal: false, // Isko false kar diya hai ya hata dein
+        printQRInTerminal: false,
         browser: Browsers.macOS('Desktop'),
         auth: state,
     });
@@ -42,14 +41,12 @@ async function connectToWhatsApp() {
     sock.ev.on('connection.update', async (update) => {
         const { connection, lastDisconnect, qr } = update;
 
-        // --- NAYI QR CODE LOGIC ---
         if (qr) {
             console.log("------------------------------------------------");
             console.log("QR code generate ho gaya hai, please scan karein:");
-            qrcode.generate(qr, { small: true }); // Yeh line QR code ko terminal mein banayegi
+            qrcode.generate(qr, { small: true });
             console.log("------------------------------------------------");
         }
-        // --- END OF NEW LOGIC ---
 
         if (connection === 'close') {
             const shouldReconnect = (lastDisconnect.error)?.output?.statusCode !== DisconnectReason.loggedOut;
@@ -59,19 +56,28 @@ async function connectToWhatsApp() {
             }
         } else if (connection === 'open') {
             console.log(`👰‍♀️ ${config.BOT_NAME} is now online!`);
+            
+            // --- NAYI PROFILE PICTURE LOGIC ---
             try {
-                await sock.updateProfilePicture(sock.user.id, { url: config.PROFILE_PIC_URL });
-                console.log('Profile picture updated!');
+                console.log('Updating profile picture...');
+                // Pehle URL se image download karein
+                const response = await axios.get(config.PROFILE_PIC_URL, { responseType: 'arraybuffer' });
+                const imageBuffer = Buffer.from(response.data, 'binary');
+                
+                // Phir buffer se picture update karein
+                await sock.updateProfilePicture(sock.user.id, imageBuffer);
+                console.log('✅ Profile picture updated successfully!');
             } catch (e) {
-                console.error('Failed to update profile picture:', e);
+                console.error('❌ Failed to update profile picture:', e.message);
             }
+            // --- END OF NEW LOGIC ---
         }
     });
 
     sock.ev.on('creds.update', saveCreds);
 
     sock.ev.on('messages.upsert', async (m) => {
-        // ... (Message handling logic poori wesi hi rahegi, koi tabdeeli nahi)
+        // ... (Message handling logic poori wesi hi rahegi)
         const msg = m.messages[0];
         if (!msg.message || msg.key.fromMe) return;
 
