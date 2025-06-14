@@ -1,23 +1,13 @@
 /**
- * DULHAN-MD - Final Version
- * Includes: Pairing Code, Auto Profile Picture, Channel Footer, Voice Note, and Menu Support
+ * DULHAN-MD - Main Bot File (Using QR Code)
+ * This version prints a QR code in the terminal for linking.
  */
 
 const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, Browsers, downloadMediaMessage } = require('@whiskeysockets/baileys');
 const pino = require('pino');
 const { readdirSync, existsSync } = require('fs');
-const path =require('path');
-const readline = require('readline');
-
-// --- BOT CONFIGURATION ---
-const BOT_CONFIG = {
-    channelLink: 'https://whatsapp.com/channel/0029VaN8WMOHFxP0SLAKKu0P',
-    audioReplyPath: 'dulhan_audio.mp3', 
-    botName: 'DULHAN-MD',
-    profilePictureUrl: 'https://files.catbox.moe/wz96cv.jpg',
-    ownerNumber: '923322964709', // Enter your number here
-    ownerName: 'Malik Sahab' // Enter your name here
-};
+const path = require('path');
+const config = require('./config'); // Assuming you are using the config file
 
 // --- Dynamic Command Handler ---
 const commands = new Map();
@@ -36,39 +26,41 @@ for (const file of files) {
     }
 }
 
-const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-const question = (text) => new Promise((resolve) => rl.question(text, resolve));
-
 // To track bot's uptime
 const startTime = Date.now();
 
 async function connectToWhatsApp() {
+    // We use a folder named 'sessions' to store authentication data
     const { state, saveCreds } = await useMultiFileAuthState('sessions');
 
     const sock = makeWASocket({
         logger: pino({ level: 'silent' }),
-        printQRInTerminal: false,
+        printQRInTerminal: true, // This is the magic line that enables QR code
         browser: Browsers.macOS('Desktop'),
         auth: state,
     });
 
-    if (!sock.authState.creds.registered) {
-        const phoneNumber = await question('Please enter your WhatsApp number (e.g., 923001234567): ');
-        const code = await sock.requestPairingCode(phoneNumber);
-        console.log(`Your pairing code is: ${code}`);
-    }
-
     sock.ev.on('creds.update', saveCreds);
 
     sock.ev.on('connection.update', async (update) => {
-        const { connection, lastDisconnect } = update;
+        const { connection, lastDisconnect, qr } = update;
+
+        if (qr) {
+            console.log("------------------------------------------------");
+            console.log("QR code received, please scan with WhatsApp!");
+            console.log("------------------------------------------------");
+        }
+
         if (connection === 'close') {
             const shouldReconnect = (lastDisconnect.error)?.output?.statusCode !== DisconnectReason.loggedOut;
-            if (shouldReconnect) connectToWhatsApp();
+            console.log('Connection closed, reconnecting...', shouldReconnect);
+            if (shouldReconnect) {
+                connectToWhatsApp();
+            }
         } else if (connection === 'open') {
-            console.log(`👰‍♀️ ${BOT_CONFIG.botName} is now online!`);
+            console.log(`👰‍♀️ ${config.BOT_NAME} is now online!`);
             try {
-                await sock.updateProfilePicture(sock.user.id, { url: BOT_CONFIG.profilePictureUrl });
+                await sock.updateProfilePicture(sock.user.id, { url: config.PROFILE_PIC_URL });
                 console.log('Profile picture updated!');
             } catch (e) {
                 console.error('Failed to update profile picture:', e);
@@ -77,16 +69,17 @@ async function connectToWhatsApp() {
     });
 
     sock.ev.on('messages.upsert', async (m) => {
+        // ... (The message handling logic remains exactly the same)
         const msg = m.messages[0];
         if (!msg.message || msg.key.fromMe) return;
 
-        const messageType = Object.keys(m.message)[0];
+        const messageType = Object.keys(msg.message)[0];
         const body = (messageType === 'conversation') ? msg.message.conversation :
                      (messageType === 'extendedTextMessage') ? msg.message.extendedTextMessage.text :
                      (messageType === 'imageMessage') ? msg.message.imageMessage.caption :
                      (messageType === 'videoMessage') ? msg.message.videoMessage.caption : '';
 
-        const prefix = '.';
+        const prefix = config.PREFIX;
         if (!body || !body.startsWith(prefix)) return;
 
         const args = body.slice(prefix.length).trim().split(/ +/);
@@ -97,21 +90,19 @@ async function connectToWhatsApp() {
         if (command) {
             try {
                 const advancedReply = async (text) => {
-                    const footerText = `\n\n*Powered by ${BOT_CONFIG.botName}*\n${BOT_CONFIG.channelLink}`;
+                    const footerText = `\n\n*Powered by ${config.BOT_NAME}*\n${config.CHANNEL_LINK}`;
                     await sock.sendMessage(msg.key.remoteJid, { text: text + footerText }, { quoted: msg });
-                    if (existsSync(BOT_CONFIG.audioReplyPath)) {
-                        await sock.sendMessage(msg.key.remoteJid, { audio: { url: BOT_CONFIG.audioReplyPath }, mimetype: 'audio/mpeg', ptt: true }, { quoted: msg });
+                    if (existsSync(config.AUDIO_REPLY_PATH)) {
+                        await sock.sendMessage(msg.key.remoteJid, { audio: { url: config.AUDIO_REPLY_PATH }, mimetype: 'audio/mpeg', ptt: true }, { quoted: msg });
                     }
                 };
                 
-                // Pass all necessary info to the handler
-                const messageObject = { ...msg, reply: advancedReply, sock, BOT_CONFIG, startTime };
+                const messageObject = { ...msg, reply: advancedReply, sock, BOT_CONFIG: config, startTime };
                 await command.handler(messageObject, { text: args.join(' '), commands, downloadMediaMessage });
 
             } catch (e) {
                 console.error(`Error in command ${commandName}:`, e);
-                // msg.reply('Oops! Kuch gadbad ho gayi 😢');
-                await sock.sendMessage(msg.key.remoteJid, {text: 'Oops! Kuch gadbad ho gayi 😢'}, {quoted: m.messages[0]});
+                 await sock.sendMessage(msg.key.remoteJid, {text: 'Oops! Kuch gadbad ho gayi 😢'}, {quoted: m.messages[0]});
             }
         }
     });
