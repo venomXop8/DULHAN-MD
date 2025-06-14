@@ -1,11 +1,17 @@
 /**
- * MEPCO Bill Checker Command for DULHAN-MD
- * This command now uses web scraping to fetch live bill data from mepcoebill.pk
+ * MEPCO Bill Checker Command for DULHAN-MD (Final & Robust Version)
+ * This command now uses a reliable method to fetch live bill data from the official PITC system.
  */
 
 const axios = require('axios');
-const cheerio = require('cheerio');
-const fetch = require('node-fetch'); // node-fetch might still be needed for other things, so we keep it.
+const cheerio =require('cheerio');
+
+// Helper function to find data from the table
+function findValue($, label) {
+    // Find the cell with the label, then get the text of the next cell in the same row
+    const value = $(`td:contains("${label}")`).next('td').text().trim();
+    return value || 'N/A';
+}
 
 module.exports = {
   command: ['mepco', 'bill', 'bijli'],
@@ -21,59 +27,53 @@ module.exports = {
     await m.reply(`🔍 Searching for bill details for: *${refNo}*...\nPlease wait, Dulhan aapke liye bill dhoond rahi hai.`);
 
     try {
-      // Data to be sent in the POST request, mimicking a form submission.
-      const formData = new URLSearchParams();
-      formData.append('referenceno', refNo);
-      formData.append('search_bill', 'search');
-
-      // Making the POST request to the website's backend script
-      const response = await axios.post('https://mepcoebill.pk/sql-actions.php', formData, {
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36'
-        }
-      });
+      // We will make a POST request to the official PITC portal
+      const response = await axios.get(`http://bill.pitc.com.pk/mepcobill/search?refno=${refNo}`);
       
       const html = response.data;
       const $ = cheerio.load(html);
 
-      // Check if the bill was not found
-      if ($('h5:contains("Bill Not Found")').length > 0) {
-        return m.reply(`❌ *Bill Not Found.*\n\nPlease double-check the Reference Number / Customer ID and try again.`);
+      // Check if the bill was not found. The official site shows an alert.
+      if (html.includes("alert('Consumer does not exist');")) {
+        return m.reply(`❌ *Consumer Not Found.*\n\nPlease double-check the Reference Number / Customer ID and try again.`);
       }
 
-      // Extracting data by finding the right elements
-      const billDetails = {};
-      $('tbody tr').each((i, elem) => {
-        const key = $(elem).find('td').eq(0).text().trim().replace(':', '');
-        const value = $(elem).find('td').eq(1).text().trim();
-        if (key && value) {
-          billDetails[key] = value;
-        }
-      });
-
-      if (Object.keys(billDetails).length === 0) {
+      // Extracting all details from the table
+      const consumerName = findValue($, 'Consumer Name');
+      const billMonth = findValue($, 'Bill Month');
+      const dueDate = findValue($, 'Due Date');
+      const amountWithinDueDate = findValue($, 'Amount Payable within Due Date');
+      const amountAfterDueDate = findValue($, 'Amount Payable after Due Date');
+      const billStatus = findValue($, 'Bill Status');
+      
+      if (consumerName === 'N/A') {
           throw new Error('Could not parse bill details. The website structure might have changed.');
       }
       
       const replyText = `
-✅ *MEPCO Bill Found!*
+*╔═══ ≪ °💡° ≫ ═══╗*
+    *MEPCO BILL DETAILS*
+*╚═══ ≪ °💡° ≫ ═══╝*
 
-*Consumer Name:* ${billDetails['Consumer Name'] || 'N/A'}
-*Reference No:* ${billDetails['Reference No'] || refNo}
-*Bill Month:* ${billDetails['Bill Month'] || 'N/A'}
-*Due Date:* *${billDetails['Due Date'] || 'N/A'}*
+*Consumer Name:* ${consumerName}
+*Bill Month:* ${billMonth}
 
-*Amount within Due Date:* Rs. ${billDetails['Payable Amount within Due Date'] || 'N/A'}
-*Amount after Due Date:* Rs. ${billDetails['Payable Amount after Due Date'] || 'N/A'}
+*┌─── ∘°❉°∘ ───┐*
+  *Due Date:* *${dueDate}*
+  *Bill Status:* *${billStatus}*
+*└─── °∘❉∘° ───┘*
 
-*Bill Status:* *${billDetails['Bill Status'] || 'N/A'}*
+*Amount within Due Date:*
+*Rs. ${amountWithinDueDate}*
+
+*Amount after Due Date:*
+*Rs. ${amountAfterDueDate}*
       `;
       m.reply(replyText);
 
     } catch (error) {
-      console.error('MEPCO Bill Scraping Error:', error);
-      m.reply('🤕 Sorry, the bill checking service is currently unavailable. Website se data fetch karne mein masla aa raha hai. Please try again later.');
+      console.error('MEPCO Bill Fetching Error:', error.message);
+      m.reply('🤕 Sorry, is waqt bill check karne mein masla aa raha hai. Ho sakta hai PITC ki website down ho. Please thori der baad try karein.');
     }
   }
 };
