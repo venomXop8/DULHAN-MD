@@ -1,19 +1,20 @@
 /**
- * DULHAN-MD - Main Bot File (Using QR Code)
- * This version prints a QR code in the terminal for linking.
+ * DULHAN-MD - Main Bot File (QR Code Fix)
+ * This version uses the modern way to handle and print QR codes.
  */
 
 const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, Browsers, downloadMediaMessage } = require('@whiskeysockets/baileys');
 const pino = require('pino');
+const qrcode = require('qrcode-terminal'); // Naya package import kiya hai
 const { readdirSync, existsSync } = require('fs');
 const path = require('path');
-const config = require('./config'); // Assuming you are using the config file
+const config = require('./config');
 
 // --- Dynamic Command Handler ---
 const commands = new Map();
+// ... (Command handler code waisa hi rahega)
 const pluginDir = path.join(__dirname, 'plugins');
 const files = readdirSync(pluginDir).filter(file => file.endsWith('.js'));
-
 for (const file of files) {
     try {
         const plugin = require(path.join(pluginDir, file));
@@ -26,30 +27,29 @@ for (const file of files) {
     }
 }
 
-// To track bot's uptime
 const startTime = Date.now();
 
 async function connectToWhatsApp() {
-    // We use a folder named 'sessions' to store authentication data
     const { state, saveCreds } = await useMultiFileAuthState('sessions');
 
     const sock = makeWASocket({
         logger: pino({ level: 'silent' }),
-        printQRInTerminal: true, // This is the magic line that enables QR code
+        printQRInTerminal: false, // Isko false kar diya hai ya hata dein
         browser: Browsers.macOS('Desktop'),
         auth: state,
     });
 
-    sock.ev.on('creds.update', saveCreds);
-
     sock.ev.on('connection.update', async (update) => {
         const { connection, lastDisconnect, qr } = update;
 
+        // --- NAYI QR CODE LOGIC ---
         if (qr) {
             console.log("------------------------------------------------");
-            console.log("QR code received, please scan with WhatsApp!");
+            console.log("QR code generate ho gaya hai, please scan karein:");
+            qrcode.generate(qr, { small: true }); // Yeh line QR code ko terminal mein banayegi
             console.log("------------------------------------------------");
         }
+        // --- END OF NEW LOGIC ---
 
         if (connection === 'close') {
             const shouldReconnect = (lastDisconnect.error)?.output?.statusCode !== DisconnectReason.loggedOut;
@@ -68,8 +68,10 @@ async function connectToWhatsApp() {
         }
     });
 
+    sock.ev.on('creds.update', saveCreds);
+
     sock.ev.on('messages.upsert', async (m) => {
-        // ... (The message handling logic remains exactly the same)
+        // ... (Message handling logic poori wesi hi rahegi, koi tabdeeli nahi)
         const msg = m.messages[0];
         if (!msg.message || msg.key.fromMe) return;
 
