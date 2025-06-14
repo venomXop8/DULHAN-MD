@@ -15,8 +15,8 @@ const BOT_CONFIG = {
     audioReplyPath: 'dulhan_audio.mp3', 
     botName: 'DULHAN-MD',
     profilePictureUrl: 'https://files.catbox.moe/wz96cv.jpg',
-    ownerNumber: 923322964709', // Apna number yahan likhein
-    ownerName: 'ᯓᬊ᭄𝙈ͥ𝙖ͫ𝙡𝙞𝙠༽⃝𝐒̹𝐚̏𝐡֦𝐚͗𝐛͗ᬊᬁ' // Apna naam yahan likhein
+    ownerNumber: 923322964709', // Enter your number here
+    ownerName: 'Malik' // Enter your name here
 };
 
 // --- Dynamic Command Handler ---
@@ -80,7 +80,7 @@ async function connectToWhatsApp() {
         const msg = m.messages[0];
         if (!msg.message || msg.key.fromMe) return;
 
-        const messageType = Object.keys(msg.message)[0];
+        const messageType = Object.keys(m.message)[0];
         const body = (messageType === 'conversation') ? msg.message.conversation :
                      (messageType === 'extendedTextMessage') ? msg.message.extendedTextMessage.text :
                      (messageType === 'imageMessage') ? msg.message.imageMessage.caption :
@@ -110,7 +110,8 @@ async function connectToWhatsApp() {
 
             } catch (e) {
                 console.error(`Error in command ${commandName}:`, e);
-                msg.reply('Oops! Kuch gadbad ho gayi 😢');
+                // msg.reply('Oops! Kuch gadbad ho gayi 😢');
+                await sock.sendMessage(msg.key.remoteJid, {text: 'Oops! Kuch gadbad ho gayi 😢'}, {quoted: m.messages[0]});
             }
         }
     });
