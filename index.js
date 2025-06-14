@@ -15,8 +15,8 @@ const BOT_CONFIG = {
     audioReplyPath: 'dulhan_audio.mp3', 
     botName: 'DULHAN-MD',
     profilePictureUrl: 'https://files.catbox.moe/wz96cv.jpg',
-    ownerNumber: 923322964709', // Enter your number here
-    ownerName: 'Malik' // Enter your name here
+    ownerNumber: '923322964709', // Enter your number here
+    ownerName: 'Malik Sahab' // Enter your name here
 };
 
 // --- Dynamic Command Handler ---
