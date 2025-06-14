@@ -4,7 +4,7 @@ module.exports = {
   SESSION_ID: "", // Isko khaali chhod dein
   
   // ▼▼▼ YAHAN APNI GEMINI API KEY DAALEIN ▼▼▼
-  GEMINI_API_KEY: "YOUR_API_KEY_HERE", 
+  GEMINI_API_KEY: "AIzaSyDDPoDW5-4wOz2xUPtX0LF2HXvTUxN8VAY", 
   
   BOT_NAME: "DULHAN-MD",
   OWNER_NAME: "Malik Sahab",
