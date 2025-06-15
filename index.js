@@ -1,14 +1,17 @@
 /**
- * DULHAN-MD - Final Version using Session ID
- * This version reads the Session ID from config.js and connects directly.
+ * DULHAN-MD - Final & Complete Main Bot File
+ * This version includes all features: Session ID login, stylish replies, and all new commands.
  */
 
+// Core Baileys and Node.js modules
 const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, Browsers, downloadMediaMessage, BufferJSON, proto, generateWAMessageFromContent } = require('@whiskeysockets/baileys');
 const pino = require('pino');
-const axios = require('axios');
-const { readdirSync, existsSync } = require('fs');
+const fs = require('fs');
 const path = require('path');
-const config = require('./config'); // config.js ko import kiya
+const axios = require('axios');
+
+// Bot configuration file
+const config = require('./config');
 
 // --- Dynamic Command Handler ---
 const commands = new Map();
@@ -26,10 +29,14 @@ for (const file of files) {
     }
 }
 
+// To track bot's uptime
 const startTime = Date.now();
 
+// List of commands that will use the new stylish reply
+const stylishCommands = ['menu', 'owner', 'alive', 'ping', 'info', 'namaz', 'prayer', 'salat', 'weather', 'mausam'];
+
 async function connectToWhatsApp() {
-    // --- NAYI SESSION ID LOGIC ---
+    // --- Session ID Login Logic ---
     let sessionId = config.SESSION_ID;
 
     if (!sessionId) {
@@ -38,15 +45,14 @@ async function connectToWhatsApp() {
         return;
     }
 
-    // Agar custom prefix wali ID hai, to usko aalag karein
-    if (sessionId.startsWith("DULHAN-MD~")) {
+    // Handle custom prefixed Session IDs if any
+    if (sessionId.includes('~')) {
         sessionId = sessionId.split('~')[1];
     }
 
-    // Temporary auth state banayein
+    // Use a temporary folder for auth state
     const { state, saveCreds } = await useMultiFileAuthState('sessions');
     try {
-        // Session ID ko decode karke state mein daalein
         const creds = JSON.parse(Buffer.from(sessionId, 'base64').toString('utf-8'));
         state.creds = creds;
     } catch (e) {
@@ -54,44 +60,40 @@ async function connectToWhatsApp() {
         console.log('Please generate a new, valid Session ID.');
         return;
     }
-    // --- END OF NEW LOGIC ---
+    // --- End of Session ID Logic ---
 
     const sock = makeWASocket({
         logger: pino({ level: 'silent' }),
-        printQRInTerminal: false, // QR ki ab zaroorat nahi
+        printQRInTerminal: false, // QR is disabled
         browser: Browsers.macOS('Desktop'),
         auth: state,
     });
 
+    // --- Connection Handling ---
     sock.ev.on('connection.update', async (update) => {
         const { connection, lastDisconnect } = update;
 
         if (connection === 'close') {
             const shouldReconnect = (lastDisconnect.error)?.output?.statusCode !== DisconnectReason.loggedOut;
-            console.log('Connection closed, reconnecting...', shouldReconnect);
             if (shouldReconnect) {
+                console.log("Connection closed, attempting to reconnect...");
                 connectToWhatsApp();
             } else {
-                 console.log("Connection Closed, Not Reconnecting. You may need a new Session ID.");
+                 console.log("Connection Closed. You may need a new Session ID if you were logged out.");
             }
         } else if (connection === 'open') {
-            console.log(`👰‍♀️ ${config.BOT_NAME} is now online!`);
-            try {
-                const response = await axios.get(config.PROFILE_PIC_URL, { responseType: 'arraybuffer' });
-                await sock.updateProfilePicture(sock.user.id, Buffer.from(response.data, 'binary'));
-                console.log('✅ Profile picture updated!');
-            } catch (e) {
-                console.error('❌ Failed to update profile picture:', e.message);
-            }
+            console.log(`👰‍♀️ ${config.BOT_NAME} is now online and ready!`);
         }
     });
     
-    // Yahan creds.update wala listener lagana zaroori hai
+    // Save credentials whenever they are updated
     sock.ev.on('creds.update', saveCreds);
 
+    // --- Message Handling ---
     sock.ev.on('messages.upsert', async (m) => {
-        // ... (Message handling logic poori wesi hi rahegi, koi tabdeeli nahi)
         const msg = m.messages[0];
+        
+        // Check for message content, allows self-testing
         if (!msg.message) return;
 
         const messageType = Object.keys(msg.message)[0];
@@ -111,40 +113,42 @@ async function connectToWhatsApp() {
         if (command) {
             try {
                 let replyFunction;
-                const stylishCommands = ['menu', 'owner', 'alive', 'ping', 'info'];
 
+                // Decide which reply style to use based on the command
                 if (stylishCommands.includes(commandName)) {
+                    // STYLISH "FORWARDED" REPLY
                     replyFunction = (text, options = {}) => {
-                         let thumbPath = './dulhan_thumbnail.jpg';
-                         if (!existsSync(thumbPath)) thumbPath = config.PROFILE_PIC_URL; // Fallback
+                        let thumbPath = './dulhan_thumbnail.jpg';
                         return sock.sendMessage(m.key.remoteJid, {
                             text: text,
                             contextInfo: {
                                 externalAdReply: {
                                     title: `👰‍♀️ ${config.BOT_NAME}`,
-                                    body: config.OWNER_NAME,
-                                    thumbnail: existsSync(thumbPath) ? fs.readFileSync(thumbPath) : {url: thumbPath},
+                                    body: `Owner: ${config.OWNER_NAME}`,
+                                    thumbnail: fs.existsSync(thumbPath) ? fs.readFileSync(thumbPath) : {url: config.PROFILE_PIC_URL},
                                     sourceUrl: config.CHANNEL_LINK,
                                     mediaUrl: config.CHANNEL_LINK,
-                                    renderLargerThumbnail: true,
+                                    renderLargerThumbnail: false,
                                     showAdAttribution: true,
                                 }
                             }
                         }, { quoted: msg });
                     };
                 } else {
+                    // REGULAR FOOTER-BASED REPLY
                     replyFunction = (text) => {
-                        const footerText = `\n\n*Powered by ${config.BOT_NAME}*\n${config.CHANNEL_LINK}`;
+                        const footerText = `\n\n*Powered by ${config.BOT_NAME}*`;
                         return sock.sendMessage(m.key.remoteJid, { text: text + footerText }, { quoted: msg });
                     };
                 }
                 
+                // Prepare all necessary data for the command handler
                 const messageObject = { ...msg, reply: replyFunction, sock, config, startTime };
                 await command.handler(messageObject, { text: args.join(' '), commands, downloadMediaMessage });
 
             } catch (e) {
-                console.error(`Error in command ${commandName}:`, e);
-                 await sock.sendMessage(m.key.remoteJid, {text: 'Oops! Kuch gadbad ho gayi 😢'}, {quoted: m.messages[0]});
+                console.error(`Error in command '${commandName}':`, e);
+                await sock.sendMessage(m.key.remoteJid, {text: 'Oops! Is command mein kuch gadbad ho gayi 😢'}, {quoted: msg});
             }
         }
     });
@@ -152,4 +156,4 @@ async function connectToWhatsApp() {
     return sock;
 }
 
-connectToWhatsApp().catch(err => console.log("Unexpected error: " + err));
+connectToWhatsApp().catch(err => console.log("An unexpected error occurred during connection: " + err));
