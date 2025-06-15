@@ -1,14 +1,14 @@
 /**
- * DULHAN-MD - Main Bot File (with Stylish Channel Mention)
+ * DULHAN-MD - Final Version using Session ID
+ * This version reads the Session ID from config.js and connects directly.
  */
 
-const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, Browsers, downloadMediaMessage } = require('@whiskeysockets/baileys');
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, Browsers, downloadMediaMessage, BufferJSON, proto, generateWAMessageFromContent } = require('@whiskeysockets/baileys');
 const pino = require('pino');
-const qrcode = require('qrcode-terminal');
 const axios = require('axios');
 const { readdirSync, existsSync } = require('fs');
 const path = require('path');
-const config = require('./config');
+const config = require('./config'); // config.js ko import kiya
 
 // --- Dynamic Command Handler ---
 const commands = new Map();
@@ -28,31 +28,52 @@ for (const file of files) {
 
 const startTime = Date.now();
 
-// List of commands that will use the new stylish reply
-const stylishCommands = ['menu', 'owner', 'alive', 'ping', 'info'];
-
 async function connectToWhatsApp() {
+    // --- NAYI SESSION ID LOGIC ---
+    let sessionId = config.SESSION_ID;
+
+    if (!sessionId) {
+        console.error('❌ Error: SESSION_ID is not set in config.js.');
+        console.log('Please generate a Session ID and add it to your config.js file.');
+        return;
+    }
+
+    // Agar custom prefix wali ID hai, to usko aalag karein
+    if (sessionId.startsWith("DULHAN-MD~")) {
+        sessionId = sessionId.split('~')[1];
+    }
+
+    // Temporary auth state banayein
     const { state, saveCreds } = await useMultiFileAuthState('sessions');
+    try {
+        // Session ID ko decode karke state mein daalein
+        const creds = JSON.parse(Buffer.from(sessionId, 'base64').toString('utf-8'));
+        state.creds = creds;
+    } catch (e) {
+        console.error('❌ Failed to decode Session ID. It seems to be corrupted or invalid.');
+        console.log('Please generate a new, valid Session ID.');
+        return;
+    }
+    // --- END OF NEW LOGIC ---
 
     const sock = makeWASocket({
         logger: pino({ level: 'silent' }),
-        printQRInTerminal: false,
+        printQRInTerminal: false, // QR ki ab zaroorat nahi
         browser: Browsers.macOS('Desktop'),
         auth: state,
     });
 
     sock.ev.on('connection.update', async (update) => {
-        const { connection, lastDisconnect, qr } = update;
-
-        if (qr) {
-            console.log("------------------------------------------------");
-            qrcode.generate(qr, { small: true });
-            console.log("------------------------------------------------");
-        }
+        const { connection, lastDisconnect } = update;
 
         if (connection === 'close') {
             const shouldReconnect = (lastDisconnect.error)?.output?.statusCode !== DisconnectReason.loggedOut;
-            if (shouldReconnect) connectToWhatsApp();
+            console.log('Connection closed, reconnecting...', shouldReconnect);
+            if (shouldReconnect) {
+                connectToWhatsApp();
+            } else {
+                 console.log("Connection Closed, Not Reconnecting. You may need a new Session ID.");
+            }
         } else if (connection === 'open') {
             console.log(`👰‍♀️ ${config.BOT_NAME} is now online!`);
             try {
@@ -64,12 +85,14 @@ async function connectToWhatsApp() {
             }
         }
     });
-
+    
+    // Yahan creds.update wala listener lagana zaroori hai
     sock.ev.on('creds.update', saveCreds);
 
     sock.ev.on('messages.upsert', async (m) => {
+        // ... (Message handling logic poori wesi hi rahegi, koi tabdeeli nahi)
         const msg = m.messages[0];
-        if (!msg.message) return; // Removed fromMe check for self-testing
+        if (!msg.message) return;
 
         const messageType = Object.keys(msg.message)[0];
         const body = (messageType === 'conversation') ? msg.message.conversation :
@@ -88,18 +111,19 @@ async function connectToWhatsApp() {
         if (command) {
             try {
                 let replyFunction;
+                const stylishCommands = ['menu', 'owner', 'alive', 'ping', 'info'];
 
-                // Decide which reply style to use
                 if (stylishCommands.includes(commandName)) {
-                    // --- STYLISH REPLY FUNCTION ---
                     replyFunction = (text, options = {}) => {
+                         let thumbPath = './dulhan_thumbnail.jpg';
+                         if (!existsSync(thumbPath)) thumbPath = config.PROFILE_PIC_URL; // Fallback
                         return sock.sendMessage(m.key.remoteJid, {
                             text: text,
                             contextInfo: {
                                 externalAdReply: {
                                     title: `👰‍♀️ ${config.BOT_NAME}`,
                                     body: config.OWNER_NAME,
-                                    thumbnail: options.thumbnail || fs.readFileSync('./dulhan_thumbnail.jpg'), // Requires a thumbnail image
+                                    thumbnail: existsSync(thumbPath) ? fs.readFileSync(thumbPath) : {url: thumbPath},
                                     sourceUrl: config.CHANNEL_LINK,
                                     mediaUrl: config.CHANNEL_LINK,
                                     renderLargerThumbnail: true,
@@ -109,7 +133,6 @@ async function connectToWhatsApp() {
                         }, { quoted: msg });
                     };
                 } else {
-                    // --- REGULAR REPLY FUNCTION ---
                     replyFunction = (text) => {
                         const footerText = `\n\n*Powered by ${config.BOT_NAME}*\n${config.CHANNEL_LINK}`;
                         return sock.sendMessage(m.key.remoteJid, { text: text + footerText }, { quoted: msg });
@@ -121,7 +144,7 @@ async function connectToWhatsApp() {
 
             } catch (e) {
                 console.error(`Error in command ${commandName}:`, e);
-                 await sock.sendMessage(msg.key.remoteJid, {text: 'Oops! Kuch gadbad ho gayi 😢'}, {quoted: m.messages[0]});
+                 await sock.sendMessage(m.key.remoteJid, {text: 'Oops! Kuch gadbad ho gayi 😢'}, {quoted: m.messages[0]});
             }
         }
     });
