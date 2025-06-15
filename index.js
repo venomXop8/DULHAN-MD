@@ -1,12 +1,12 @@
 /**
  * DULHAN-MD - Final & Complete Main Bot File
- * This version includes all features: Session ID login, stylish replies, and all new commands.
+ * This version includes all features and the final error fix.
  */
 
 // Core Baileys and Node.js modules
 const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, Browsers, downloadMediaMessage, BufferJSON, proto, generateWAMessageFromContent } = require('@whiskeysockets/baileys');
 const pino = require('pino');
-const fs = require('fs');
+const fs = require('fs'); // <--- YEH MISSING LINE ADD KAR DI GAYI HAI
 const path = require('path');
 const axios = require('axios');
 
@@ -16,7 +16,8 @@ const config = require('./config');
 // --- Dynamic Command Handler ---
 const commands = new Map();
 const pluginDir = path.join(__dirname, 'plugins');
-const files = readdirSync(pluginDir).filter(file => file.endsWith('.js'));
+// ab 'fs.readdirSync' kaam karega
+const files = fs.readdirSync(pluginDir).filter(file => file.endsWith('.js')); 
 for (const file of files) {
     try {
         const plugin = require(path.join(pluginDir, file));
@@ -45,12 +46,10 @@ async function connectToWhatsApp() {
         return;
     }
 
-    // Handle custom prefixed Session IDs if any
     if (sessionId.includes('~')) {
         sessionId = sessionId.split('~')[1];
     }
-
-    // Use a temporary folder for auth state
+    
     const { state, saveCreds } = await useMultiFileAuthState('sessions');
     try {
         const creds = JSON.parse(Buffer.from(sessionId, 'base64').toString('utf-8'));
@@ -64,7 +63,7 @@ async function connectToWhatsApp() {
 
     const sock = makeWASocket({
         logger: pino({ level: 'silent' }),
-        printQRInTerminal: false, // QR is disabled
+        printQRInTerminal: false,
         browser: Browsers.macOS('Desktop'),
         auth: state,
     });
@@ -86,14 +85,12 @@ async function connectToWhatsApp() {
         }
     });
     
-    // Save credentials whenever they are updated
     sock.ev.on('creds.update', saveCreds);
 
     // --- Message Handling ---
     sock.ev.on('messages.upsert', async (m) => {
         const msg = m.messages[0];
         
-        // Check for message content, allows self-testing
         if (!msg.message) return;
 
         const messageType = Object.keys(msg.message)[0];
@@ -114,9 +111,7 @@ async function connectToWhatsApp() {
             try {
                 let replyFunction;
 
-                // Decide which reply style to use based on the command
                 if (stylishCommands.includes(commandName)) {
-                    // STYLISH "FORWARDED" REPLY
                     replyFunction = (text, options = {}) => {
                         let thumbPath = './dulhan_thumbnail.jpg';
                         return sock.sendMessage(m.key.remoteJid, {
@@ -135,14 +130,12 @@ async function connectToWhatsApp() {
                         }, { quoted: msg });
                     };
                 } else {
-                    // REGULAR FOOTER-BASED REPLY
                     replyFunction = (text) => {
                         const footerText = `\n\n*Powered by ${config.BOT_NAME}*`;
                         return sock.sendMessage(m.key.remoteJid, { text: text + footerText }, { quoted: msg });
                     };
                 }
                 
-                // Prepare all necessary data for the command handler
                 const messageObject = { ...msg, reply: replyFunction, sock, config, startTime };
                 await command.handler(messageObject, { text: args.join(' '), commands, downloadMediaMessage });
 
