@@ -1,9 +1,9 @@
 /**
- * DULHAN-MD - Final Version with Dual Login (Session ID & QR Code)
- * This version will use Session ID if available, otherwise it will show a QR code.
+ * DULHAN-MD - Final & Safest Main Bot File
+ * This version includes robust message parsing and error handling.
  */
 
-const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, Browsers, downloadMediaMessage } = require('@whiskeysockets/baileys');
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, Browsers, downloadMediaMessage, getContentType } = require('@whiskeysockets/baileys');
 const pino = require('pino');
 const fs = require('fs');
 const path = require('path');
@@ -14,56 +14,43 @@ const config = require('./config');
 // --- Dynamic Command Handler ---
 const commands = new Map();
 const pluginDir = path.join(__dirname, 'plugins');
-const files = fs.readdirSync(pluginDir).filter(file => file.endsWith('.js'));
-for (const file of files) {
-    try {
-        const plugin = require(path.join(pluginDir, file));
-        if (plugin.command && plugin.handler) {
-            plugin.command.forEach(cmd => commands.set(cmd, plugin));
-            console.log(`[Plugin Loaded] ${file}`);
+try {
+    const files = fs.readdirSync(pluginDir).filter(file => file.endsWith('.js'));
+    for (const file of files) {
+        try {
+            const plugin = require(path.join(pluginDir, file));
+            if (plugin.command && plugin.handler) {
+                plugin.command.forEach(cmd => commands.set(cmd, plugin));
+                console.log(`[Plugin Loaded] ${file}`);
+            }
+        } catch (e) {
+            console.error(`Error loading plugin ${file}:`, e);
         }
-    } catch (e) {
-        console.error(`Error loading plugin ${file}:`, e);
     }
+} catch (e) {
+    console.error("Could not read plugins directory:", e);
 }
+
 
 const startTime = Date.now();
 const stylishCommands = ['menu', 'owner', 'alive', 'ping', 'info', 'namaz', 'prayer', 'salat', 'weather', 'mausam'];
 
 async function connectToWhatsApp() {
     const { state, saveCreds } = await useMultiFileAuthState('sessions');
-    let sock;
+    const sock = makeWASocket({
+        logger: pino({ level: 'silent' }),
+        printQRInTerminal: true, // We will let this be true and handle it in connection.update
+        browser: Browsers.macOS('Desktop'),
+        auth: state,
+    });
 
-    // --- DUAL LOGIN LOGIC ---
-    if (config.SESSION_ID) {
-        console.log('Attempting to connect with Session ID...');
-        let sessionId = config.SESSION_ID;
-        if (sessionId.includes('~')) {
-            sessionId = sessionId.split('~')[1];
-        }
-        try {
-            const creds = JSON.parse(Buffer.from(sessionId, 'base64').toString('utf-8'));
-            state.creds = creds;
-        } catch (e) {
-            console.error('❌ Failed to decode Session ID. It seems to be corrupted. Starting with QR Code instead.');
-            // Fallback to QR code if session is invalid
-            sock = makeWASocket({ logger: pino({ level: 'silent' }), auth: state, browser: Browsers.macOS('Desktop') });
-        }
-    }
-    
-    // If sock is not created yet (i.e., no valid session), create it for QR
-    if (!sock) {
-        console.log('No valid Session ID found. Starting with QR Code...');
-        sock = makeWASocket({ logger: pino({ level: 'silent' }), auth: state, browser: Browsers.macOS('Desktop') });
-    }
-    // --- END OF DUAL LOGIN LOGIC ---
-
+    // --- Connection Handling ---
     sock.ev.on('connection.update', async (update) => {
         const { connection, lastDisconnect, qr } = update;
 
         if (qr) {
             console.log("------------------------------------------------");
-            console.log("Please scan this QR code with your WhatsApp.");
+            console.log("QR Code Received, Please Scan!");
             qrcode.generate(qr, { small: true });
             console.log("------------------------------------------------");
         }
@@ -74,39 +61,39 @@ async function connectToWhatsApp() {
                 console.log("Connection closed, reconnecting...");
                 connectToWhatsApp();
             } else {
-                console.log("Connection Closed. If you were using a Session ID, it might have expired. Please generate a new one or scan the QR code.");
+                console.log("Connection Closed. You have been logged out.");
             }
         } else if (connection === 'open') {
             console.log(`👰‍♀️ ${config.BOT_NAME} is now online and ready!`);
-            // Upon successful connection, save the new session details
-            await saveCreds(); 
         }
     });
     
     sock.ev.on('creds.update', saveCreds);
 
+    // --- Message Handling ---
     sock.ev.on('messages.upsert', async (m) => {
-        // ... (Message handling logic poori wesi hi rahegi)
         const msg = m.messages[0];
-        if (!msg.message) return;
-
-        const messageType = Object.keys(msg.message)[0];
-        const body = (messageType === 'conversation') ? msg.message.conversation :
-                     (messageType === 'extendedTextMessage') ? msg.message.extendedTextMessage.text :
-                     (messageType === 'imageMessage') ? msg.message.imageMessage.caption :
-                     (messageType === 'videoMessage') ? msg.message.videoMessage.caption : '';
-
-        const prefix = config.PREFIX;
-        if (!body || !body.startsWith(prefix)) return;
-
-        const args = body.slice(prefix.length).trim().split(/ +/);
-        const commandName = args.shift().toLowerCase();
+        if (!msg.message || msg.key.remoteJid === 'status@broadcast') return;
         
-        const command = commands.get(commandName);
+        // Allows self-testing
+        // if (msg.key.fromMe) return; 
 
-        if (command) {
-            try {
+        try {
+            const messageType = getContentType(msg.message);
+            const body = (messageType === 'conversation') ? msg.message.conversation :
+                         (messageType === 'extendedTextMessage') ? msg.message.extendedTextMessage.text :
+                         (msg.message.imageMessage?.caption) || (msg.message.videoMessage?.caption) || '';
+
+            if (!body || !body.startsWith(config.PREFIX)) return;
+
+            const args = body.slice(config.PREFIX.length).trim().split(/ +/);
+            const commandName = args.shift().toLowerCase();
+            
+            const command = commands.get(commandName);
+
+            if (command) {
                 let replyFunction;
+
                 if (stylishCommands.includes(commandName)) {
                     replyFunction = (text) => {
                          let thumbPath = './dulhan_thumbnail.jpg';
@@ -132,13 +119,13 @@ async function connectToWhatsApp() {
                 
                 const messageObject = { ...msg, reply: replyFunction, sock, config, startTime };
                 await command.handler(messageObject, { text: args.join(' '), commands, downloadMediaMessage });
-
-            } catch (e) {
-                console.error(`Error in command '${commandName}':`, e);
-                await sock.sendMessage(m.key.remoteJid, {text: 'Oops! Is command mein kuch gadbad ho gayi 😢'}, {quoted: m.messages[0]});
             }
+        } catch (e) {
+            console.error("Error in messages.upsert event:", e);
         }
     });
+
+    return sock;
 }
 
-connectToWhatsApp().catch(err => console.log("Unexpected error:", err));
+connectToWhatsApp().catch(err => console.log("An unexpected error occurred:", err));
