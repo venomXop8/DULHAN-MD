@@ -1,8 +1,9 @@
 module.exports = {
   command: ['menu', 'help', 'list'],
-  description: 'Shows the list of all available commands.',
+  description: 'Shows all available commands.',
   category: 'main',
-  async handler(m, { commands, config }) {
+  async handler(m, { commands }) { // 'commands' is passed in the second argument
+    const { config } = m; // FIX: Destructure from 'm'
     let menuText = `
 Hello, *${m.pushName || 'Jaan'}*! 
 Main aapki personal assistant, *${config.BOT_NAME}* 👰‍♀️
@@ -32,7 +33,7 @@ Main aapki personal assistant, *${config.BOT_NAME}* 👰‍♀️
 *└─── °∘❉∘° ───┘*
 `;
         categories[category].forEach(cmd => {
-            menuText += `  ⦿ *.${cmd.command[0]}*\n`;
+            menuText += `  ⦿ *${config.PREFIX}${cmd.command[0]}*\n`;
         });
     }
 
