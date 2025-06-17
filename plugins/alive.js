@@ -13,7 +13,8 @@ module.exports = {
   command: ['alive', 'ping'],
   description: 'Checks if the bot is online and shows uptime.',
   category: 'main',
-  async handler(m, { sock, config, startTime }) {
+  async handler(m) {
+    const { sock, config, startTime } = m; // FIX: Destructure from 'm'
     const uptime = formatUptime(Date.now() - startTime);
     const aliveText = `
 *╔═══ ≪ °❈° ≫ ═══╗*
@@ -28,10 +29,8 @@ module.exports = {
 *└─── °∘❉∘° ───┘*
     `;
     
-    // Naya stylish reply istemal karein
     await m.reply(aliveText);
     
-    // Voice note sirf is command ke saath bhejें
     if (existsSync(config.AUDIO_REPLY_PATH)) {
         await sock.sendMessage(m.key.remoteJid, {
             audio: { url: config.AUDIO_REPLY_PATH },
