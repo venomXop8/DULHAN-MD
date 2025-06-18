@@ -1,9 +1,15 @@
+/**
+ * DULHAN-MD - Stylish List Menu
+ * Powered by MALIK SAHAB
+ */
+const fs = require('fs');
+
 module.exports = {
   command: ['menu', 'help', 'list'],
   description: 'Shows all available commands in a stylish list.',
   category: 'main',
-  async handler(m, { commands }) {
-    const { sock, config, pushName } = m;
+  async handler(m) {
+    const { sock, config, pushName, commands } = m;
     
     let menuText = `
 Hello, *${pushName || 'Jaan'}*! 
@@ -28,7 +34,7 @@ Neeche di gayi list se koi bhi option chunein.`;
             title: `*${category}*`,
             rows: categories[category].map(cmd => ({
                 title: `${config.PREFIX}${cmd.command[0]}`,
-                rowId: `${config.PREFIX}${cmd.command[0]}`, // User can click this to run the command
+                rowId: `${config.PREFIX}${cmd.command[0]}`,
                 description: cmd.description || ''
             }))
         });
