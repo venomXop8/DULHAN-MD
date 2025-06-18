@@ -10,7 +10,7 @@ module.exports = {
   category: 'ai',
   async handler(m) {
     const { text, config, reply } = m;
-    if (!config.GEMINI_API_KEY || config.GEMINI_API_KEY === "YOUR_API_KEY_HERE") {
+    if (!config.GEMINI_API_KEY || config.GEMINI_API_KEY === "AIzaSyDDPoDW5-4wOz2xUPtX0LF2HXvTUxN8VAY") {
         return reply("❌ Gemini API key set nahi hai. Please config.js file mein add karein.");
     }
     if (!text) {
