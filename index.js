@@ -1,5 +1,6 @@
 /**
- * DULHAN-MD - Ultimate Version with Advanced Event Handling
+ * DULHAN-MD - Ultimate Final Version
+ * This version has a rock-solid foundation and passes context safely to all commands.
  */
 
 const {
@@ -8,8 +9,7 @@ const {
     DisconnectReason,
     Browsers,
     downloadMediaMessage,
-    getContentType,
-    proto
+    getContentType
 } = require('@whiskeysockets/baileys');
 const pino = require('pino');
 const fs = require('fs');
@@ -17,14 +17,8 @@ const path = require('path');
 const qrcode = require('qrcode-terminal');
 const config = require('./config');
 
-// --- Global Stores & Settings ---
-const commands = new Map();
-const messageStore = new Map(); // For Anti-Delete
-let antiDeleteEnabled = true; // Default state
-let antiViewOnceEnabled = true; // Default state
-let autoSeenEnabled = true; // Default state
-
 // --- Command Loader ---
+const commands = new Map();
 const pluginDir = path.join(__dirname, 'plugins');
 try {
     const files = fs.readdirSync(pluginDir).filter(file => file.endsWith('.js'));
@@ -35,10 +29,14 @@ try {
             if (plugin.command && plugin.handler) {
                 plugin.command.forEach(cmd => commands.set(cmd, plugin));
             }
-        } catch (e) { console.error(`Error loading plugin ${file}:`, e); }
+        } catch (e) {
+            console.error(`Error loading plugin ${file}:`, e);
+        }
     }
-    console.log("[Plugins] All plugins loaded successfully.");
-} catch (e) { console.error("Could not read plugins directory:", e); }
+    console.log(`[Plugins] ${commands.size} commands loaded successfully.`);
+} catch (e) {
+    console.error("Could not read plugins directory:", e);
+}
 
 
 // --- Main Connection Logic ---
@@ -56,70 +54,58 @@ async function connectToWhatsApp() {
     // --- Event Handlers ---
     sock.ev.on('connection.update', (update) => {
         const { connection, qr } = update;
-        if (qr) qrcode.generate(qr, { small: true });
-        if (connection === 'open') console.log('✅ WhatsApp connection opened successfully!');
+        if (qr) {
+            console.log("QR Code available, please scan.");
+            qrcode.generate(qr, { small: true });
+        }
+        if (connection === 'open') {
+            console.log('✅ WhatsApp connection opened successfully!');
+        }
         if (connection === 'close') {
             const reason = update.lastDisconnect?.error?.output?.statusCode;
-            console.log(`❌ Connection closed. Reason: ${DisconnectReason[reason] || 'Unknown'}. Reconnecting...`);
-            setTimeout(connectToWhatsApp, 5000);
+            const reasonText = DisconnectReason[reason] || 'Unknown';
+            console.log(`❌ Connection closed. Reason: ${reasonText}. Reconnecting...`);
+            if (reason !== DisconnectReason.loggedOut) {
+                setTimeout(connectToWhatsApp, 5000);
+            }
         }
     });
 
     sock.ev.on('messages.upsert', async (m) => {
-        const msg = m.messages[0];
-        if (!msg.message) return;
-        
-        // Store message for Anti-Delete
-        messageStore.set(msg.key.id, msg);
+        try {
+            const msg = m.messages[0];
+            if (!msg.message || msg.key.remoteJid === 'status@broadcast') return;
 
-        // Auto-Seen Status
-        if (msg.key.remoteJid === 'status@broadcast' && autoSeenEnabled) {
-            await sock.readMessages([msg.key]);
-            console.log(`[Status Seen] Seen status from ${msg.pushName}`);
-        }
-        
-        // Anti-View-Once
-        if ((msg.message.viewOnceMessage || msg.message.viewOnceMessageV2) && antiViewOnceEnabled) {
-            const viewOnceMsg = msg.message.viewOnceMessage || msg.message.viewOnceMessageV2;
-            const type = Object.keys(viewOnceMsg.message)[0];
-            delete viewOnceMsg.message[type].viewOnce;
-            const caption = viewOnceMsg.message[type].caption || "";
-            await sock.sendMessage(m.key.remoteJid, {
-                ...viewOnceMsg.message,
-                caption: `*Anti-View-Once by DULHAN-MD*\n\n${caption}`
-            }, { quoted: msg });
-        }
+            // This is the safest way to get the message body
+            const body = msg.message?.conversation || msg.message?.extendedTextMessage?.text || msg.message?.imageMessage?.caption || msg.message?.videoMessage?.caption || "";
 
-        // Handle regular commands
-        await handleCommand(sock, m);
-    });
-    
-    // Anti-Delete Handler
-    sock.ev.on('messages.update', async (updates) => {
-        if (!antiDeleteEnabled) return;
-        for (const { key, update } of updates) {
-            if (update.messageStubType === proto.WebMessageInfo.MessageStubType.REVOKE && update.messageStubParameters) {
-                const originalMsg = messageStore.get(key.id);
-                if (originalMsg) {
-                    await sock.sendMessage(key.remoteJid, {
-                        text: `*Anti-Delete by DULHAN-MD* 😠\n\nUser @${key.participant.split('@')[0]} ne yeh message delete kiya tha:`,
-                        mentions: [key.participant]
-                    }, { quoted: originalMsg });
-                }
+            if (!body.startsWith(config.PREFIX)) return;
+
+            const args = body.slice(config.PREFIX.length).trim().split(/ +/);
+            const commandName = args.shift().toLowerCase();
+            const command = commands.get(commandName);
+
+            if (command) {
+                console.log(`Executing command: ${commandName}`);
+                
+                // We will attach all necessary context directly to the message object 'm'
+                m.sock = sock;
+                m.config = config;
+                m.text = args.join(' ');
+                m.commands = commands;
+                m.downloadMediaMessage = downloadMediaMessage;
+                m.reply = (text) => sock.sendMessage(m.key.remoteJid, { text }, { quoted: m });
+
+                // Execute the command handler
+                await command.handler(m);
             }
+        } catch (e) {
+            console.error("Error in message handler:", e);
         }
     });
 
     sock.ev.on('creds.update', saveCreds);
 }
-
-// --- Command Handling Function ---
-async function handleCommand(sock, m) {
-    // ... (This function contains the command processing logic from the previous final index.js)
-    // For brevity, it is assumed to be here. You can copy the 'messages.upsert' logic from
-    // the previous final version and paste it here.
-}
-
 
 // --- Initial Startup ---
 connectToWhatsApp().catch(e => console.error("FATAL ERROR:", e));
