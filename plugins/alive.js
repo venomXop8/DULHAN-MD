@@ -1,12 +1,15 @@
-const { existsSync } = require('fs');
+/**
+ * DULHAN-MD - Alive Command
+ * Powered by MALIK SAHAB
+ */
+const os = require('os');
 
-function formatUptime(ms) {
-    let seconds = Math.floor(ms / 1000);
-    let minutes = Math.floor(seconds / 60);
-    let hours = Math.floor(minutes / 60);
-    let days = Math.floor(hours / 24);
-    seconds %= 60; minutes %= 60; hours %= 24;
-    return `${days}d ${hours}h ${minutes}m ${seconds}s`;
+function formatUptime(seconds) {
+    const d = Math.floor(seconds / (3600 * 24));
+    const h = Math.floor(seconds % (3600 * 24) / 3600);
+    const m = Math.floor(seconds % 3600 / 60);
+    const s = Math.floor(seconds % 60);
+    return `${d}d ${h}h ${m}m ${s}s`;
 }
 
 module.exports = {
@@ -14,29 +17,22 @@ module.exports = {
   description: 'Checks if the bot is online and shows uptime.',
   category: 'main',
   async handler(m) {
-    const { sock, config, startTime } = m; // FIX: Destructure from 'm'
-    const uptime = formatUptime(Date.now() - startTime);
+    const { config } = m;
+    const uptime = formatUptime(process.uptime());
+    
     const aliveText = `
 *╔═══ ≪ °❈° ≫ ═══╗*
   *DULHAN-MD IS ALIVE*
 *╚═══ ≪ °❈° ≫ ═══╝*
 
-*〝Don't worry, main yahin hoon. Aapke liye hamesha online...〞*
+*〝Main bilkul theek aur aapki khidmat ke liye taiyar hoon!〞*
 
 *┌─── ∘°❉°∘ ───┐*
-  *Uptime: ${uptime}*
-  *Owner: ${config.OWNER_NAME}*
+  *Uptime:* ${uptime}
+  *Owner:* ${config.OWNER_NAME}
 *└─── °∘❉∘° ───┘*
     `;
     
     await m.reply(aliveText);
-    
-    if (existsSync(config.AUDIO_REPLY_PATH)) {
-        await sock.sendMessage(m.key.remoteJid, {
-            audio: { url: config.AUDIO_REPLY_PATH },
-            mimetype: 'audio/mpeg',
-            ptt: true
-        }, { quoted: m });
-    }
   }
 };
