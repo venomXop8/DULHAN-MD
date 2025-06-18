@@ -1,77 +1,34 @@
 /**
  * DULHAN-MD - All-in-One Media Downloader
- * Uses the Cobalt API to download media from various websites like Instagram, TikTok, etc.
+ * Powered by MALIK SAHAB
  */
-
 const axios = require('axios');
 
-// Function to check if a string is a valid URL
-function isValidUrl(string) {
-  try {
-    new URL(string);
-    return true;
-  } catch (_) {
-    return false;  
-  }
-}
+function isValidUrl(s) { try { new URL(s); return true; } catch { return false; } }
 
 module.exports = {
-  command: ['get', 'download', 'fetch', 'dl'],
+  command: ['get', 'download', 'fetch'],
   description: 'Downloads media (video/image) from a given URL.',
   category: 'downloader',
-  
-  async handler(m, { text, sock }) {
-    if (!text || !isValidUrl(text)) {
-      return m.reply('Please ek aisi link to dein jahan se main download kar sakun! 🙄\n\n*Example:*\n*.get https://www.instagram.com/p/C...*');
-    }
-
-    const url = text.trim();
-
+  async handler(m) {
+    const { text, sock, reply } = m;
+    if (!text || !isValidUrl(text)) return reply('Please ek link to dein jahan se main download kar sakun! 🙄');
     try {
-      await m.reply(`*〝Downloading from link...〞* ⏳\n\nAapki farmayish par download kar rahi hoon, thora sabar karein...`);
-
-      // Call the Cobalt API
-      const response = await axios.post('https://co.wuk.sh/api/json', {
-        url: url,
-        isNoTTWatermark: true, // For TikTok, remove watermark
-        dubLang: false
-      }, {
-        headers: {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json'
-        }
-      });
+      await reply(`*Downloading from link...* ⏳`);
+      const { data } = await axios.post('https://co.wuk.sh/api/json', { url: text, isNoTTWatermark: true });
+      if (data.status === 'error') throw new Error(data.text);
       
-      const data = response.data;
-
-      if (data.status === 'error') {
-        throw new Error(data.text || 'API failed to process the link.');
-      }
-      
+      const mediaUrl = data.url;
       if (data.status === 'stream') {
-        const downloadUrl = data.url;
-        
-        // Let Baileys figure out if it's a video or image based on the content
-        await sock.sendMessage(m.key.remoteJid, { 
-            video: { url: downloadUrl },
-            caption: `Yeh lijiye, aapki video. Bilkul HD! ✨`
-        }, { quoted: m }).catch(async () => {
-            // If sending as video fails, try sending as image
-            await sock.sendMessage(m.key.remoteJid, {
-                image: { url: downloadUrl },
-                caption: `Yeh lijiye, aapki photo. Ek dum clear! ✨`
-            }, { quoted: m });
-        });
-        
-        await m.reply(`✅ *Downloaded Successfully!*`);
-        
-      } else {
-         throw new Error('Unsupported link or could not find downloadable media.');
+        const caption = data.title || `Downloaded by DULHAN-MD`;
+        await sock.sendMessage(m.key.remoteJid, { video: { url: mediaUrl }, caption: caption })
+          .catch(() => sock.sendMessage(m.key.remoteJid, { image: { url: mediaUrl }, caption: caption }));
+      } else { 
+        throw new Error('Unsupported link or could not find downloadable media.');
       }
-
-    } catch (error) {
-      console.error("Downloader API Error:", error);
-      m.reply(`❌ Maazrat, is link se download karne mein masla aa gaya.\n\n*Reason:* ${error.message}`);
+    } catch (e) {
+        console.error("Get DL Error:", e);
+        reply(`❌ Maazrat, download mein masla aa gaya.`);
     }
   }
 };
