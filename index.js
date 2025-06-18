@@ -1,6 +1,6 @@
 /**
- * DULHAN-MD - Ultimate Final Version
- * This version has a rock-solid foundation and passes context safely to all commands.
+ * DULHAN-MD - Final & Rock-Solid Architecture
+ * This version uses a professional, stable structure to prevent all errors.
  */
 
 const {
@@ -64,8 +64,9 @@ async function connectToWhatsApp() {
         if (connection === 'close') {
             const reason = update.lastDisconnect?.error?.output?.statusCode;
             const reasonText = DisconnectReason[reason] || 'Unknown';
-            console.log(`❌ Connection closed. Reason: ${reasonText}. Reconnecting...`);
+            console.log(`❌ Connection closed. Reason: ${reasonText}.`);
             if (reason !== DisconnectReason.loggedOut) {
+                console.log("Attempting to reconnect in 5 seconds...");
                 setTimeout(connectToWhatsApp, 5000);
             }
         }
@@ -75,8 +76,8 @@ async function connectToWhatsApp() {
         try {
             const msg = m.messages[0];
             if (!msg.message || msg.key.remoteJid === 'status@broadcast') return;
+            if (msg.key.fromMe) return; // Ignore messages from self by default
 
-            // This is the safest way to get the message body
             const body = msg.message?.conversation || msg.message?.extendedTextMessage?.text || msg.message?.imageMessage?.caption || msg.message?.videoMessage?.caption || "";
 
             if (!body.startsWith(config.PREFIX)) return;
@@ -88,16 +89,17 @@ async function connectToWhatsApp() {
             if (command) {
                 console.log(`Executing command: ${commandName}`);
                 
-                // We will attach all necessary context directly to the message object 'm'
-                m.sock = sock;
-                m.config = config;
-                m.text = args.join(' ');
-                m.commands = commands;
-                m.downloadMediaMessage = downloadMediaMessage;
-                m.reply = (text) => sock.sendMessage(m.key.remoteJid, { text }, { quoted: m });
+                // --- THE ULTIMATE FIX ---
+                // We attach all necessary context directly to the message object 'msg'
+                msg.sock = sock;
+                msg.config = config;
+                msg.text = args.join(' ');
+                msg.commands = commands;
+                msg.downloadMediaMessage = downloadMediaMessage;
+                msg.reply = (text) => sock.sendMessage(msg.key.remoteJid, { text }, { quoted: msg });
 
-                // Execute the command handler
-                await command.handler(m);
+                // Execute the command handler with a single, complete object
+                await command.handler(msg);
             }
         } catch (e) {
             console.error("Error in message handler:", e);
