@@ -22,15 +22,18 @@ module.exports = {
   description: 'Downloads an image from a Freepik URL.',
   category: 'downloader',
   
-  async handler(m, { text, sock }) {
+  // Use the safe handler signature
+  async handler(m) {
+    const { text, sock, reply } = m; // Destructure necessary items from 'm'
+
     if (!text || !isFreepikUrl(text)) {
-      return m.reply('Mujhe Freepik ka aesa link to dein jahan se main photo download kar sakun! 🧐\n\n*Example:*\n*.freepik https://www.freepik.com/free-ai-image/...*');
+      return reply('Mujhe Freepik ka aesa link to dein jahan se main photo download kar sakun! 🧐\n\n*Example:*\n*.freepik https://www.freepik.com/free-ai-image/...*');
     }
 
     const url = text.trim();
 
     try {
-      await m.reply(`*〝Downloading Freepik image... Please wait.〞* ⏳`);
+      await reply(`*〝Downloading Freepik image... Please wait.〞* ⏳`);
 
       // 1. Fetch the HTML of the Freepik page
       const { data } = await axios.get(url, {
@@ -43,7 +46,7 @@ module.exports = {
       const $ = cheerio.load(data);
       
       // 3. Find the main image element and extract its URL
-      // Freepik usually places the main image in a <img id="main-image"> or similar tag.
+      // Freepik usually places the main image in a <img id="main-image"> tag
       const imageUrl = $('img#main-image').attr('src');
       
       if (!imageUrl) {
@@ -60,11 +63,11 @@ module.exports = {
           fileName: filename
       }, { quoted: m });
       
-      await m.reply(`✅ *Downloaded from Freepik*`);
+      await sock.sendMessage(m.key.remoteJid, { text: `✅ *Downloaded from Freepik*` }, { quoted: m });
 
     } catch (error) {
       console.error("Freepik Downloader Error:", error);
-      m.reply(`❌ Maazrat, is link se photo download karne mein masla aa gaya.\n\n*Reason:* ${error.message}`);
+      reply(`❌ Maazrat, is link se photo download karne mein masla aa gaya.\n\n*Reason:* ${error.message}`);
     }
   }
 };
