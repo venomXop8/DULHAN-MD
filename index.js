@@ -1,6 +1,7 @@
 /**
- * DULHAN-MD - Final & Rock-Solid Architecture
- * This version uses a professional, stable structure to prevent all errors.
+ * DULHAN-MD - Ultimate Final Version
+ * This version has a rock-solid foundation and passes context safely to all commands.
+ * Powered by MALIK SAHAB
  */
 
 const {
@@ -75,8 +76,7 @@ async function connectToWhatsApp() {
     sock.ev.on('messages.upsert', async (m) => {
         try {
             const msg = m.messages[0];
-            if (!msg.message || msg.key.remoteJid === 'status@broadcast') return;
-            if (msg.key.fromMe) return; // Ignore messages from self by default
+            if (!msg.message || msg.key.remoteJid === 'status@broadcast' || msg.key.fromMe) return;
 
             const body = msg.message?.conversation || msg.message?.extendedTextMessage?.text || msg.message?.imageMessage?.caption || msg.message?.videoMessage?.caption || "";
 
