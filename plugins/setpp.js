@@ -1,32 +1,33 @@
-const axios = require('axios');
-
+/**
+ * DULHAN-MD - Set Profile Picture Command
+ * Powered by MALIK SAHAB
+ */
 module.exports = {
-  command: ['setpp', 'dp', 'setprofile'],
-  description: 'Sets the profile picture of the bot.',
+  command: ['dp', 'setpp'],
+  description: "Sets the bot's profile picture. (Owner only)",
   category: 'owner',
-  async handler(m, { downloadMediaMessage }) {
-    const { sock, config } = m; // FIX: Destructure from 'm'
-    const isOwner = m.key.fromMe || m.sender === (config.OWNER_NUMBER + '@s.whatsapp.net');
+  async handler(m) {
+    const { sock, config, downloadMediaMessage, reply } = m;
     
-    if (!isOwner) {
-      return m.reply('Yeh command sirf mera malik (owner) istemal kar sakta hai! 😏');
-    }
+    // Owner check
+    const isOwner = m.key.fromMe || m.sender.startsWith(config.OWNER_NUMBER);
+    if (!isOwner) return reply('Yeh command sirf mera malik (owner) istemal kar sakta hai! 😏');
 
     const msgType = Object.keys(m.message)[0];
     const isQuotedImage = msgType === 'extendedTextMessage' && m.message.extendedTextMessage.contextInfo?.quotedMessage?.imageMessage;
 
     if (!isQuotedImage) {
-      return m.reply('Bot ki profile picture badalne ke liye, kisi photo ko reply karke yeh command likhein: *.setpp*');
+      return reply('Bot ki profile picture badalne ke liye, kisi photo ko reply karke yeh command likhein: *.dp*');
     }
     
     try {
-      await m.reply('Aapki pasand ki DP laga rahi hoon, Malik Sahab...');
+      await reply('Aapki pasand ki DP laga rahi hoon, Malik Sahab...');
       const buffer = await downloadMediaMessage(m, 'buffer');
       await sock.updateProfilePicture(sock.user.id, buffer);
-      await m.reply('✅ Profile picture kamyabi se badal di gayi hai!');
-    } catch (error) {
-      console.error("Set Profile Picture Error:", error);
-      m.reply('❌ Photo lagane mein koi masla aa gaya.');
+      await reply('✅ Profile picture kamyabi se badal di gayi hai!');
+    } catch (e) {
+      console.error("Set DP Error:", e);
+      reply('❌ Photo lagane mein koi masla aa gaya.');
     }
   }
 };
