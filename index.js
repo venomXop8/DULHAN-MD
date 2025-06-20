@@ -10,7 +10,8 @@ const {
     DisconnectReason,
     Browsers,
     downloadMediaMessage,
-    getContentType
+    getContentType,
+    proto
 } = require('@whiskeysockets/baileys');
 const pino = require('pino');
 const fs = require('fs');
@@ -48,22 +49,24 @@ async function connectToWhatsApp() {
     const sock = makeWASocket({
         logger: pino({ level: 'silent' }),
         auth: state,
-        printQRInTerminal: true,
+        printQRInTerminal: false, // We will handle QR code manually
         browser: Browsers.macOS('Desktop'),
     });
 
     // --- Event Handlers ---
     sock.ev.on('connection.update', (update) => {
-        const { connection, qr } = update;
+        const { connection, qr, lastDisconnect } = update;
         if (qr) {
-            console.log("QR Code available, please scan.");
+            console.log("------------------------------------------------");
+            console.log("QR Code Received, Please Scan!");
             qrcode.generate(qr, { small: true });
+            console.log("------------------------------------------------");
         }
         if (connection === 'open') {
             console.log('✅ WhatsApp connection opened successfully!');
         }
         if (connection === 'close') {
-            const reason = update.lastDisconnect?.error?.output?.statusCode;
+            const reason = lastDisconnect?.error?.output?.statusCode;
             const reasonText = DisconnectReason[reason] || 'Unknown';
             console.log(`❌ Connection closed. Reason: ${reasonText}.`);
             if (reason !== DisconnectReason.loggedOut) {
@@ -78,6 +81,27 @@ async function connectToWhatsApp() {
             const msg = m.messages[0];
             if (!msg.message || msg.key.remoteJid === 'status@broadcast' || msg.key.fromMe) return;
 
+            // Store message for Anti-Delete
+            messageStore.set(msg.key.id, msg);
+
+            // Auto-Seen Status
+            if (msg.key.remoteJid === 'status@broadcast' && config.AUTO_SEEN_STATUS) {
+                await sock.readMessages([msg.key]);
+                console.log(`[Status Seen] Seen status from ${msg.pushName}`);
+            }
+        
+            // Anti-View-Once
+            if ((msg.message.viewOnceMessage || msg.message.viewOnceMessageV2) && config.ANTI_VIEW_ONCE) {
+                const viewOnceMsg = msg.message.viewOnceMessage || msg.message.viewOnceMessageV2;
+                const type = Object.keys(viewOnceMsg.message)[0];
+                delete viewOnceMsg.message[type].viewOnce;
+                const caption = viewOnceMsg.message[type].caption || "";
+                await sock.sendMessage(m.key.remoteJid, {
+                    ...viewOnceMsg.message,
+                    caption: `*Anti-View-Once by DULHAN-MD*\n\n${caption}`
+                }, { quoted: msg });
+            }
+
             const body = msg.message?.conversation || msg.message?.extendedTextMessage?.text || msg.message?.imageMessage?.caption || msg.message?.videoMessage?.caption || "";
 
             if (!body.startsWith(config.PREFIX)) return;
@@ -89,8 +113,7 @@ async function connectToWhatsApp() {
             if (command) {
                 console.log(`Executing command: ${commandName}`);
                 
-                // --- THE ULTIMATE FIX ---
-                // We attach all necessary context directly to the message object 'msg'
+                // Attach all necessary context directly to the message object 'msg'
                 msg.sock = sock;
                 msg.config = config;
                 msg.text = args.join(' ');
@@ -98,11 +121,27 @@ async function connectToWhatsApp() {
                 msg.downloadMediaMessage = downloadMediaMessage;
                 msg.reply = (text) => sock.sendMessage(msg.key.remoteJid, { text }, { quoted: msg });
 
-                // Execute the command handler with a single, complete object
                 await command.handler(msg);
             }
         } catch (e) {
             console.error("Error in message handler:", e);
+        }
+    });
+
+    // Anti-Delete Handler
+    const messageStore = new Map();
+    sock.ev.on('messages.update', async (updates) => {
+        if (!config.ANTI_DELETE) return;
+        for (const { key, update } of updates) {
+            if (update.messageStubType === proto.WebMessageInfo.MessageStubType.REVOKE && update.messageStubParameters) {
+                const originalMsg = messageStore.get(key.id);
+                if (originalMsg) {
+                    await sock.sendMessage(key.remoteJid, {
+                        text: `*Anti-Delete by DULHAN-MD* 😠\n\nUser @${key.participant.split('@')[0]} ne yeh message delete kiya tha:`,
+                        mentions: [key.participant]
+                    }, { quoted: originalMsg });
+                }
+            }
         }
     });
 
