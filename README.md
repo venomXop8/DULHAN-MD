@@ -53,7 +53,7 @@ Bot ke saare commands dekhne ke liye `.menu` istemal karein. Yeh ek interactive 
 | **Islamic** | Namaz ke auqat maloom karein.                             |
 | **Utility** | QR Code banayein, text to speech, background remove karein, etc. |
 | **Owner** | Bot ke malik ke liye khaas commands.                      |
-
+|**Malik**  |Malik Cmd
 ---
 
 ## 💻 Local Setup
