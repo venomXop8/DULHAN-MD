@@ -2,11 +2,11 @@ module.exports = {
     command: ['promote', 'demote'],
     description: 'Promotes or demotes a user in a group.',
     category: 'group',
-    async handler(m, { text }) {
-        const { sock, key } = m;
+    async handler(m) {
+        const { sock, key, body } = m;
         if (!key.remoteJid.endsWith('@g.us')) return m.reply('This command is for groups only.');
 
-        const command = m.body.split(' ')[0].toLowerCase().slice(1);
+        const command = body.split(' ')[0].toLowerCase().slice(1);
         const mentionedJid = m.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0] || m.message?.extendedTextMessage?.contextInfo?.participant;
         if (!mentionedJid) return m.reply('Please mention a user to ' + command);
 
