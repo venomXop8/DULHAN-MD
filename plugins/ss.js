@@ -1,4 +1,4 @@
-//  (Website Screenshot)
+// plugins/ss.js (Website Screenshot)
 const axios = require('axios');
 module.exports = {
     command: ['ss', 'screenshot'],
