@@ -6,6 +6,75 @@
   "scripts": {
     "start": "node index.js"
   },
+  "author": "Malik Sahab (arkhan9Aapke Bot ko Heroku par deploy karne ke liye maine sabhi files ko check kar liya hai aur jo bhi zaroori changes the, woh kar diye hain. Kuch files mein chote-mote errors the jinhe theek kar diya gaya hai.
+
+Neeche main aapko aasan steps mein bata raha hoon ke bot ko deploy kaise karna hai aur aagey aapko fixed code files milengi.
+
+### Heroku par Bot Deploy Karne ka Tarika
+
+**Step 1: Code ko GitHub par Upload karein**
+Sabse pehle, apne bot ka poora folder (jismein aane wali fixed files bhi shamil hain) ek new GitHub repository mein upload karein.
+
+**Step 2: Heroku Account Banayein**
+Agar aapka Heroku par account nahi hai, to [heroku.com](https://heroku.com) par जाकर ek free account bana lein.
+
+**Step 3: New App Banayein**
+1.  Heroku dashboard mein, "New" par click karke "Create new app" select karein.
+2.  Apni app ka koi unique naam rakhein aur region select karke "Create app" par click karein.
+
+**Step 4: FFmpeg Buildpack Add Karein**
+Aapke bot ko audio/video features ke liye FFmpeg ki zaroorat hogi.
+1.  Apni Heroku app ke "Settings" tab mein jayein.
+2.  "Buildpacks" section tak scroll karein aur "Add buildpack" par click karein.
+3.  Yeh do buildpacks ek-ek karke add karein:
+    * `heroku/nodejs`
+    * `https://github.com/jonathanong/heroku-buildpack-ffmpeg-latest.git`
+
+**Step 5: GitHub Repository Connect Karein**
+1.  Apni Heroku app ke "Deploy" tab mein jayein.
+2.  "Deployment method" mein "GitHub" select karein aur apne account se connect karein.
+3.  Apne bot ki repository search karke "Connect" par click karein.
+
+**Step 6: Zaroori Config Vars Set Karein**
+Yeh sabse zaroori step hai. Isse aapka bot Heroku par chalega.
+1.  Apni app ke "Settings" tab mein "Config Vars" section tak scroll karein aur "Reveal Config Vars" par click karein.
+2.  Yahan neeche di gayi sabhi keys aur unki values ek-ek karke add karein:
+    * `SESSION_ID`: Isko haasil karne ke liye pehle isko khaali chhod kar deploy karein. Phir Heroku logs mein QR code scan karke jo session ID mile, woh yahan paste karein.
+    * `GEMINI_API_KEY`: Aapki Gemini AI ki API key.
+    * `NEWS_API_KEY`: `newsapi.org` se li gayi API key.
+    * `CURRENCY_API_KEY`: `currencyapi.com` se li gayi API key.
+    * `WEATHER_API_KEY`: `openweathermap.org` se li gayi API key.
+    * `REMOVEBG_API_KEY`: `remove.bg` se li gayi API key.
+
+**Step 7: Bot ko Deploy Karein**
+1.  "Deploy" tab par wapas jayein.
+2.  "Manual deploy" section mein, "Deploy Branch" par click karein (branch `main` ya `master` honi chahiye).
+3.  Heroku aapke bot ko build aur deploy karna shuru kar dega.
+
+**Step 8: Worker Dyno ko ON Karein**
+1.  Deployment complete hone ke baad, "Resources" tab par jayein.
+2.  Wahan `worker: npm start` likha hoga. Uske saamne edit (pencil) icon par click karke, switch ko ON karein aur "Confirm" par click karein.
+
+Aapka bot ab Heroku par 24/7 online ho jayega!
+
+---
+
+### Fixed Files
+
+Yahan woh files hain jin mein maine zaroori aurbadlaav kiye hain. Purani files ko in se replace kar dein.
+
+#### 1. `package.json` (Updated)
+Heroku ke liye Node.js ka version add kiya gaya hai.
+
+```json
+{
+  "name": "dulhan-md",
+  "version": "5.0.0",
+  "description": "An AI-powered WhatsApp Bot Suite by Malik Sahab.",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
   "author": "Malik Sahab (arkhan998)",
   "license": "ISC",
   "engines": {
@@ -13,7 +82,7 @@
   },
   "dependencies": {
     "@google/generative-ai": "^0.14.1",
-    "@whiskeysockets/baileys": "^6.7.2",
+    "@whiskeysockets/baileys": "^6.7.8",
     "@vitalets/google-translate-api": "^9.2.0",
     "axios": "^1.7.2",
     "cheerio": "^1.0.0-rc.12",
