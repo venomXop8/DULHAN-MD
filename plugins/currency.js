@@ -21,19 +21,3 @@ module.exports = {
     } catch(e) { reply('Conversion failed. Please check currency codes.'); }
   }
 };
-```javascript
-// plugins/shorten.js
-const axios = require('axios');
-module.exports = {
-  command: ['shorten', 'tinyurl'],
-  description: 'Shortens a long URL.',
-  category: 'utility',
-  async handler(m) {
-    const { text, reply } = m;
-    if (!text.startsWith('http')) return reply('Please provide a valid URL to shorten.');
-    try {
-        const { data } = await axios.get(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(text)}`);
-        reply(`*Your shortened link is ready:*\n${data}`);
-    } catch (e) { reply('Sorry, could not shorten this link.'); }
-  }
-};
