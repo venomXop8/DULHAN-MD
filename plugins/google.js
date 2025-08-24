@@ -21,19 +21,3 @@ module.exports = {
     } catch (e) { m.reply('Sorry, Google par kuch nahi mila.'); }
   }
 };
-```javascript
-// plugins/pinterest.js
-const axios = require('axios');
-module.exports = {
-  command: ['pinterest', 'pin'],
-  description: 'Searches for images on Pinterest.',
-  category: 'search',
-  async handler(m, { text }) {
-    if (!text) return m.reply('Pinterest par kaisi photo chahiye?');
-    try {
-        await m.reply(`Pinterest par "${text}" ki photos dhoond rahi hoon...`);
-        const { data } = await axios.get(`https://api.lolhuman.xyz/api/pinterest?apikey=GataDios&query=${text}`);
-        await m.sock.sendMessage(m.key.remoteJid, { image: { url: data.result } }, { quoted: m });
-    } catch (e) { m.reply('Sorry, Pinterest par aisi koi photo nahi mili.'); }
-  }
-};
