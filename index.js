@@ -81,27 +81,6 @@ async function connectToWhatsApp() {
             const msg = m.messages[0];
             if (!msg.message || msg.key.remoteJid === 'status@broadcast' || msg.key.fromMe) return;
 
-            // Store message for Anti-Delete
-            messageStore.set(msg.key.id, msg);
-
-            // Auto-Seen Status
-            if (msg.key.remoteJid === 'status@broadcast' && config.AUTO_SEEN_STATUS) {
-                await sock.readMessages([msg.key]);
-                console.log(`[Status Seen] Seen status from ${msg.pushName}`);
-            }
-        
-            // Anti-View-Once
-            if ((msg.message.viewOnceMessage || msg.message.viewOnceMessageV2) && config.ANTI_VIEW_ONCE) {
-                const viewOnceMsg = msg.message.viewOnceMessage || msg.message.viewOnceMessageV2;
-                const type = Object.keys(viewOnceMsg.message)[0];
-                delete viewOnceMsg.message[type].viewOnce;
-                const caption = viewOnceMsg.message[type].caption || "";
-                await sock.sendMessage(m.key.remoteJid, {
-                    ...viewOnceMsg.message,
-                    caption: `*Anti-View-Once by DULHAN-MD*\n\n${caption}`
-                }, { quoted: msg });
-            }
-
             const body = msg.message?.conversation || msg.message?.extendedTextMessage?.text || msg.message?.imageMessage?.caption || msg.message?.videoMessage?.caption || "";
 
             if (!body.startsWith(config.PREFIX)) return;
@@ -125,23 +104,6 @@ async function connectToWhatsApp() {
             }
         } catch (e) {
             console.error("Error in message handler:", e);
-        }
-    });
-
-    // Anti-Delete Handler
-    const messageStore = new Map();
-    sock.ev.on('messages.update', async (updates) => {
-        if (!config.ANTI_DELETE) return;
-        for (const { key, update } of updates) {
-            if (update.messageStubType === proto.WebMessageInfo.MessageStubType.REVOKE && update.messageStubParameters) {
-                const originalMsg = messageStore.get(key.id);
-                if (originalMsg) {
-                    await sock.sendMessage(key.remoteJid, {
-                        text: `*Anti-Delete by DULHAN-MD* 😠\n\nUser @${key.participant.split('@')[0]} ne yeh message delete kiya tha:`,
-                        mentions: [key.participant]
-                    }, { quoted: originalMsg });
-                }
-            }
         }
     });
 
