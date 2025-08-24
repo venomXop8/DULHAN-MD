@@ -1,5 +1,5 @@
 // plugins/antidelete.js
-let antiDeleteEnabled = true; // This should be moved to a central config later
+let antiDeleteEnabled = true; 
 module.exports = {
     command: ['antidelete'],
     description: 'Enables or disables the anti-delete feature.',
