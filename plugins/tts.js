@@ -5,6 +5,7 @@
 const gtts = require('gtts');
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 
 module.exports = {
   command: ['tts', 'say', 'speak'],
@@ -15,7 +16,8 @@ module.exports = {
     if (!text) return reply('Kuch likhein to sahi jisko main bol sakun!');
     try {
         const lang = 'ur'; // Urdu/Hindi voice
-        const outputFile = path.join(__dirname, `../temp_tts_${Date.now()}.mp3`);
+        // Use the system's temporary directory, which is writable on Heroku
+        const outputFile = path.join(os.tmpdir(), `temp_tts_${Date.now()}.mp3`);
         
         const speech = new gtts(text, lang);
         await new Promise((resolve, reject) => {
@@ -26,7 +28,7 @@ module.exports = {
         });
 
         await sock.sendMessage(m.key.remoteJid, { audio: { url: outputFile }, mimetype: 'audio/mpeg', ptt: true }, { quoted: m });
-        fs.unlinkSync(outputFile);
+        fs.unlinkSync(outputFile); // Clean up the temp file
     } catch (e) {
         console.error("TTS Error:", e);
         reply("Sorry, aawaz nikalne mein koi masla aa gaya.");
