@@ -1,4 +1,4 @@
-// 
+// plugins/code.js
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 module.exports = {
   command: ['code', 'gencode'],
