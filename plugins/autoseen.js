@@ -1,5 +1,5 @@
 // plugins/autoseen.js
-let autoSeenEnabled = true; // This should be moved to a central config later
+let autoSeenEnabled = true; 
 module.exports = {
     command: ['autoseen'],
     description: 'Enables or disables auto-seeing status updates.',
