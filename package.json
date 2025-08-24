@@ -82,7 +82,7 @@ Heroku ke liye Node.js ka version add kiya gaya hai.
   },
   "dependencies": {
     "@google/generative-ai": "^0.14.1",
-    "@whiskeysockets/baileys": "^6.7.8",
+    "@whiskeysockets/baileys": "^6.7.2",
     "@vitalets/google-translate-api": "^9.2.0",
     "axios": "^1.7.2",
     "cheerio": "^1.0.0-rc.12",
