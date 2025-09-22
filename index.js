@@ -13,7 +13,7 @@ const config = require('./config');
 
 // --- Configuration ---
 const mode = "pair"; // Change to "qr" for QR code mode, "pair" for pairing code mode
-const bot_number = "919719313814"; // Replace with your bot number
+const bot_number = "919719313814"; // Replace with your bot number (without +)
 const PORT = process.env.PORT || 5000; // For Render deployment
 const MAX_RECONNECT_ATTEMPTS = 3;
 
@@ -45,7 +45,10 @@ function hasExistingSession() {
     try {
         if (fs.existsSync(sessionsDir)) {
             const files = fs.readdirSync(sessionsDir);
-            return files.length > 0 && files.some(file => file.endsWith('.json'));
+            const sessionFiles = files.filter(file => 
+                file.endsWith('.json') && !file.endsWith('creds.json')
+            );
+            return sessionFiles.length > 0;
         }
     } catch (e) {
         console.error("Error checking session directory:", e);
@@ -70,33 +73,49 @@ async function connectToWhatsApp() {
     try {
         sock = makeWASocket({
             logger: pino({ level: 'silent' }),
-            auth: state,
+            auth: {
+                creds: state.creds,
+                keys: state.keys,
+            },
             printQRInTerminal: false, // We will handle QR code manually
             browser: Browsers.macOS('Desktop'),
+            shouldIgnoreJid: jid => jid === 'status@broadcast',
+            generateHighQualityLinkPreview: true,
+            syncFullHistory: false,
+            markOnlineOnConnect: true,
         });
 
         // --- Event Handlers ---
         sock.ev.on('connection.update', async (update) => {
             const { connection, qr, lastDisconnect } = update;
             
-            // Handle QR code or pairing code only if we don't have a session
-            if (qr && !hasSession) {
+            console.log('Connection update:', connection);
+            
+            if (qr) {
+                console.log("QR/pairing code received");
                 if (mode.toLowerCase() === "qr") {
                     console.log("------------------------------------------------");
                     console.log("QR Code Received, Please Scan!");
                     qrcode.generate(qr, { small: true });
                     console.log("------------------------------------------------");
                 } else if (mode.toLowerCase() === "pair") {
-                    console.log("Pairing code received, requesting pairing...");
+                    console.log("Requesting pairing code...");
                     
                     try {
                         // Request pairing code for the hardcoded bot number
-                        const code = await sock.requestPairingCode(bot_number);
+                        const code = await sock.requestPairingCode(bot_number.replace(/[^0-9]/g, ''));
                         console.log("------------------------------------------------");
                         console.log(`Pairing Code: ${code}`);
                         console.log("------------------------------------------------");
+                        console.log(`Please enter this code in your WhatsApp linked devices section`);
+                        console.log("------------------------------------------------");
                     } catch (error) {
                         console.error("Error requesting pairing code:", error);
+                        console.log("Falling back to QR code mode...");
+                        console.log("------------------------------------------------");
+                        console.log("QR Code Received, Please Scan!");
+                        qrcode.generate(qr, { small: true });
+                        console.log("------------------------------------------------");
                     }
                 }
             }
@@ -107,9 +126,11 @@ async function connectToWhatsApp() {
             }
             
             if (connection === 'close') {
-                const reason = lastDisconnect?.error?.output?.statusCode;
+                const shouldReconnect = (lastDisconnect.error?.output?.statusCode !== DisconnectReason.loggedOut);
+                const reason = lastDisconnect.error?.output?.statusCode;
                 const reasonText = DisconnectReason[reason] || 'Unknown';
-                console.log(`❌ Connection closed. Reason: ${reasonText}.`);
+                
+                console.log(`❌ Connection closed. Reason: ${reasonText} (${reason}).`);
                 
                 if (reason === DisconnectReason.loggedOut) {
                     console.log('Session logged out. Please scan again.');
@@ -130,16 +151,22 @@ async function connectToWhatsApp() {
                     }
                 }
                 
-                if (reason !== DisconnectReason.loggedOut && reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+                // Reconnect if it's not a logout and we haven't exceeded max attempts
+                if (shouldReconnect && reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
                     reconnectAttempts++;
-                    console.log(`Attempting to reconnect (${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS}) in 5 seconds...`);
-                    setTimeout(connectToWhatsApp, 5000);
+                    console.log(`Attempting to reconnect (${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS}) in 3 seconds...`);
+                    setTimeout(connectToWhatsApp, 3000);
                 } else if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS && !hasSession) {
-                    console.log("Max reconnection attempts reached. Please scan QR code or use pairing code.");
+                    console.log("Max reconnection attempts reached. Restarting connection process...");
+                    reconnectAttempts = 0;
+                    setTimeout(connectToWhatsApp, 3000);
                 }
             }
         });
 
+        sock.ev.on('creds.update', saveCreds);
+
+        // Handle messages
         sock.ev.on('messages.upsert', async (m) => {
             try {
                 const msg = m.messages[0];
@@ -172,15 +199,13 @@ async function connectToWhatsApp() {
                 console.error("Error in message handler:", e);
             }
         });
-
-        sock.ev.on('creds.update', saveCreds);
         
     } catch (error) {
         console.error('Error creating socket:', error);
         if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
             reconnectAttempts++;
-            console.log(`Attempting to reconnect (${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS}) in 5 seconds...`);
-            setTimeout(connectToWhatsApp, 5000);
+            console.log(`Attempting to reconnect after error (${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS}) in 3 seconds...`);
+            setTimeout(connectToWhatsApp, 3000);
         }
     }
 }
